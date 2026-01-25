@@ -1,0 +1,72 @@
+@layer components {
+
+    /* ==========================
+   TABLE WRAPPER
+========================== */
+
+    .table {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 0.75rem;
+        overflow: hidden;
+    }
+
+    /* ==========================
+   TOOLBAR
+========================== */
+
+    .table__toolbar {
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid var(--border);
+    }
+
+    .table__search {
+        width: 100%;
+        max-width: 320px;
+        padding: 0.5rem 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: 0.5rem;
+        background: var(--bg);
+        color: var(--text);
+    }
+
+    /* ==========================
+   TABLE
+========================== */
+
+    .table__container {
+        overflow-x: auto;
+    }
+
+    .table__element {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .table__element th,
+    .table__element td {
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid var(--border);
+        text-align: left;
+        white-space: nowrap;
+    }
+
+    .table__element th {
+        background: var(--surface-alt);
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+
+    /* ==========================
+   ROW STATES
+========================== */
+
+    .table__element tbody tr:hover {
+        background: var(--hover);
+    }
+
+    .table__element tbody tr.is-hidden {
+        display: none;
+    }
+
+}

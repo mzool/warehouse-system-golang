@@ -1,0 +1,304 @@
+{{define "docs"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ .Title }}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: white;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .category {
+            background: white;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+            overflow: hidden;
+            animation: fadeIn 0.5s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .category-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            font-size: 1.5em;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background 0.3s;
+        }
+
+        .category-header:hover {
+            background: linear-gradient(135deg, #5568d3 0%, #65408b 100%);
+        }
+
+        .category-header .toggle {
+            font-size: 1.2em;
+            transition: transform 0.3s;
+        }
+
+        .category-header.collapsed .toggle {
+            transform: rotate(-90deg);
+        }
+
+        .routes {
+            padding: 20px;
+            display: block;
+        }
+
+        .routes.hidden {
+            display: none;
+        }
+
+        .route {
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            overflow: hidden;
+            transition: all 0.3s;
+        }
+
+        .route:hover {
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+            border-color: #667eea;
+        }
+
+        .route-header {
+            padding: 15px;
+            background: #f8f9fa;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .method {
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 0.85em;
+            min-width: 70px;
+            text-align: center;
+        }
+
+        .method.GET { background: #61affe; color: white; }
+        .method.POST { background: #49cc90; color: white; }
+        .method.PUT { background: #fca130; color: white; }
+        .method.PATCH { background: #50e3c2; color: white; }
+        .method.DELETE { background: #f93e3e; color: white; }
+
+        .path {
+            font-family: 'Courier New', monospace;
+            font-size: 1.1em;
+            color: #2c3e50;
+            flex-grow: 1;
+        }
+
+        .route-details {
+            padding: 15px;
+            background: white;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .route-details p {
+            margin-bottom: 10px;
+            color: #555;
+        }
+
+        .detail-label {
+            font-weight: bold;
+            color: #667eea;
+            display: inline-block;
+            min-width: 120px;
+        }
+
+        .auth-required {
+            display: inline-block;
+            padding: 4px 8px;
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 4px;
+            color: #856404;
+            font-size: 0.85em;
+            font-weight: 500;
+        }
+
+        .no-auth {
+            display: inline-block;
+            padding: 4px 8px;
+            background: #d4edda;
+            border: 1px solid #28a745;
+            border-radius: 4px;
+            color: #155724;
+            font-size: 0.85em;
+            font-weight: 500;
+        }
+
+        .back-link {
+            display: inline-block;
+            color: white;
+            text-decoration: none;
+            padding: 12px 24px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 8px;
+            margin-bottom: 20px;
+            transition: background 0.3s;
+        }
+
+        .back-link:hover {
+            background: rgba(255,255,255,0.3);
+        }
+
+        .summary {
+            background: rgba(255,255,255,0.95);
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            text-align: center;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        .summary h2 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .stats {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            flex-wrap: wrap;
+        }
+
+        .stat {
+            padding: 10px 20px;
+        }
+
+        .stat-number {
+            font-size: 2em;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .stat-label {
+            color: #666;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 {{ .Title }}</h1>
+
+        <div class="summary">
+            <h2>API Overview</h2>
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-number">{{ len .Categories }}</div>
+                    <div class="stat-label">Categories</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-number">
+                        {{ $total := 0 }}
+                        {{ range $category, $routes := .Routes }}
+                            {{ $total = add $total (len $routes) }}
+                        {{ end }}
+                        {{ $total }}
+                    </div>
+                    <div class="stat-label">Total Routes</div>
+                </div>
+            </div>
+        </div>
+
+        {{ range .Categories }}
+            {{ $category := . }}
+            {{ $routes := index $.Routes $category }}
+            <div class="category">
+                <div class="category-header" onclick="toggleCategory(this)">
+                    <span>{{ $category }}</span>
+                    <span class="toggle">▼</span>
+                </div>
+                <div class="routes">
+                    {{ range $routes }}
+                    <div class="route">
+                        <div class="route-header">
+                            <span class="method {{ .Method }}">{{ .Method }}</span>
+                            <span class="path">{{ .Path }}</span>
+                        </div>
+                        <div class="route-details">
+                            {{ if .Description }}
+                            <p><span class="detail-label">Description:</span> {{ .Description }}</p>
+                            {{ end }}
+                            <p>
+                                <span class="detail-label">Authentication:</span>
+                                {{ if .Protected }}
+                                    <span class="auth-required">🔒 Required</span>
+                                {{ else }}
+                                    <span class="no-auth">🌐 Public</span>
+                                {{ end }}
+                            </p>
+                        </div>
+                    </div>
+                    {{ end }}
+                </div>
+            </div>
+        {{ end }}
+    </div>
+
+    <script>
+        function toggleCategory(header) {
+            header.classList.toggle('collapsed');
+            const routes = header.nextElementSibling;
+            routes.classList.toggle('hidden');
+        }
+
+        // Add smooth scroll behavior
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth' });
+                }
+            });
+        });
+    </script>
+</body>
+</html>
+{{end}}

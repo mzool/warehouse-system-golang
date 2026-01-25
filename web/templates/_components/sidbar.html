@@ -1,0 +1,31 @@
+{{ define "sidebar" }}
+<aside
+  class="sidebar sidebar--{{ .Position }}"
+  data-sidebar
+  data-mode="{{ .Mode }}"
+  aria-label="Sidebar Navigation"
+>
+  <div class="sidebar__header">
+    <span class="sidebar__title">{{ .Title }}</span>
+    <button
+      class="sidebar__close"
+      data-sidebar-close
+      aria-label="Close sidebar"
+    >
+      ✕
+    </button>
+  </div>
+
+  <nav class="sidebar__nav">
+    <ul>
+      {{ range .Items }}
+      <li>
+        <a href="{{ .Href }}" class="{{ if .Active }}active{{ end }}">
+          {{ .Label }}
+        </a>
+      </li>
+      {{ end }}
+    </ul>
+  </nav>
+</aside>
+{{ end }}

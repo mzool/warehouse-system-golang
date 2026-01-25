@@ -1,0 +1,28 @@
+{{ define "card" }}
+<section
+  class="card {{ if .Clickable }}card--clickable{{ end }}"
+  {{ if .ID }}id="{{ .ID }}"{{ end }}
+  {{ if .Href }}data-card-link="{{ .Href }}"{{ end }}
+>
+  {{ if .Header }}
+  <header class="card__header">
+    <h3 class="card__title">{{ .Header }}</h3>
+    {{ if .HeaderAction }}
+      <div class="card__header-action">
+        {{ .HeaderAction }}
+      </div>
+    {{ end }}
+  </header>
+  {{ end }}
+
+  <div class="card__body">
+    {{ .Content }}
+  </div>
+
+  {{ if .Footer }}
+  <footer class="card__footer">
+    {{ .Footer }}
+  </footer>
+  {{ end }}
+</section>
+{{ end }}

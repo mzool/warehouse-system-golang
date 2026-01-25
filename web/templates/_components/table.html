@@ -1,0 +1,38 @@
+{{ define "table" }}
+<section class="table" data-table>
+  
+  {{ if .Search }}
+  <div class="table__toolbar">
+    <input
+      type="search"
+      class="table__search"
+      placeholder="Search..."
+      data-table-search
+      aria-label="Search table"
+    />
+  </div>
+  {{ end }}
+
+  <div class="table__container">
+    <table class="table__element">
+      <thead>
+        <tr>
+          {{ range .Headers }}
+          <th>{{ . }}</th>
+          {{ end }}
+        </tr>
+      </thead>
+      <tbody data-table-body>
+        {{ range .Rows }}
+        <tr>
+          {{ range . }}
+          <td>{{ . }}</td>
+          {{ end }}
+        </tr>
+        {{ end }}
+      </tbody>
+    </table>
+  </div>
+
+</section>
+{{ end }}

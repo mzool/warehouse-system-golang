@@ -1,0 +1,76 @@
+{{ define "navbar" }}
+<header class="navbar" data-navbar>
+  <div class="navbar__inner">
+
+    <!-- Brand -->
+    <div class="navbar__brand">
+      <a href="/" class="navbar__logo">
+        {{ .Brand }}
+      </a>
+    </div>
+
+    <!-- Desktop Navigation -->
+    <nav class="navbar__nav" data-navbar-desktop>
+      <ul class="navbar__menu">
+        {{ range .Items }}
+          {{ if .Children }}
+          <li class="navbar__item has-dropdown">
+            <button
+              class="navbar__link"
+              data-dropdown-toggle
+              aria-expanded="false"
+            >
+              {{ .Label }}
+            </button>
+            <ul class="navbar__dropdown">
+              {{ range .Children }}
+              <li>
+                <a href="{{ .Href }}" class="navbar__dropdown-link">
+                  {{ .Label }}
+                </a>
+              </li>
+              {{ end }}
+            </ul>
+          </li>
+          {{ else }}
+          <li class="navbar__item">
+            <a href="{{ .Href }}" class="navbar__link {{ if .Active }}is-active{{ end }}">
+              {{ .Label }}
+            </a>
+          </li>
+          {{ end }}
+        {{ end }}
+      </ul>
+    </nav>
+
+    <!-- Actions -->
+    <div class="navbar__actions">
+      {{ if .ShowThemeToggle }}
+      <button
+        class="navbar__action"
+        data-theme-toggle
+        aria-label="Toggle theme"
+      >
+        🌓
+      </button>
+      {{ end }}
+
+      {{ if .User }}
+      <a href="/logout" class="navbar__action">Logout</a>
+      {{ else }}
+      <a href="/login" class="navbar__action">Login</a>
+      {{ end }}
+
+      <!-- Mobile toggle -->
+      <button
+        class="navbar__burger"
+        data-navbar-toggle
+        aria-label="Toggle menu"
+      >
+        ☰
+      </button>
+    </div>
+
+  </div>
+</header>
+{{ end }}
