@@ -1,13 +1,19 @@
 package routes
 
 import (
+	"log/slog"
+	"warehouse_system/internal/cache"
+	"warehouse_system/internal/database/db"
 	"warehouse_system/internal/handlers"
+	"warehouse_system/internal/handlers/users"
 	"warehouse_system/internal/router"
 	"warehouse_system/web/views"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // SetupRoutes registers all application routes
-func SetupRoutes(r *router.RouterImpl) {
+func SetupRoutes(r *router.RouterImpl, db *pgxpool.Pool, q *db.Queries, logger *slog.Logger, cache cache.Cache) {
 	// Health check route
 	r.Register(&router.Route{
 		Method:      "GET",
@@ -20,4 +26,45 @@ func SetupRoutes(r *router.RouterImpl) {
 	views.RegisterRoutes(r)
 
 	// Add more routes here
+	ApiRoutes(r, db, q, logger, cache)
+}
+
+func ApiRoutes(r *router.RouterImpl, db *pgxpool.Pool, q *db.Queries, logger *slog.Logger, cache cache.Cache) {
+	h := handlers.NewHandler(q, cache, logger, db)
+	usersHandler := users.NewUserHandler(h)
+
+	// Authentication routes
+	r.Register(&router.Route{
+		Method:      "POST",
+		Path:        "/login",
+		HandlerFunc: usersHandler.Login,
+		Category:    "auth",
+		Input:       &router.RouteInput{RequiredAuth: false},
+	})
+
+	// User profile routes (require authentication)
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/profile",
+		HandlerFunc: usersHandler.ViewMyProfile,
+		Category:    "users",
+		Input:       &router.RouteInput{RequiredAuth: true},
+	})
+
+	r.Register(&router.Route{
+		Method:      "PUT",
+		Path:        "/profile",
+		HandlerFunc: usersHandler.UpdateMyProfile,
+		Category:    "users",
+		Input:       &router.RouteInput{RequiredAuth: true},
+	})
+
+	r.Register(&router.Route{
+		Method:      "POST",
+		Path:        "/profile/change-password",
+		HandlerFunc: usersHandler.ChangeMyPassword,
+		Category:    "users",
+		Input:       &router.RouteInput{RequiredAuth: true},
+	})
+
 }

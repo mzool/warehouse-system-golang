@@ -1,18 +1,21 @@
-# Makefile for warehouse_system
+# Makefile for tawseela
 
-.PHONY: help run build test clean migrate-up migrate-down seed dev
+.PHONY: help run build test clean migrate migrate-status migrate-rollback migrate-dry-run migrate-force seed dev
 
 help:
 	@echo "Available targets:"
-	@echo "  run          - Run the application"
-	@echo "  dev          - Run with hot reload"
-	@echo "  build        - Build production binary"
-	@echo "  test         - Run tests"
-	@echo "  test-cover   - Run tests with coverage"
-	@echo "  migrate-up   - Run database migrations"
-	@echo "  migrate-down - Rollback migrations"
-	@echo "  seed         - Seed database"
-	@echo "  clean        - Clean build artifacts"
+	@echo "  run             - Run the application"
+	@echo "  dev             - Run with hot reload"
+	@echo "  build           - Build production binary"
+	@echo "  test            - Run tests"
+	@echo "  test-cover      - Run tests with coverage"
+	@echo "  migrate         - Apply pending database migrations"
+	@echo "  migrate-status  - Show migration status"
+	@echo "  migrate-rollback - Rollback last migration (use N=2 for multiple)"
+	@echo "  migrate-dry-run - Preview migrations without applying"
+	@echo "  migrate-force   - Force re-apply all migrations (dangerous!)"
+	@echo "  seed            - Seed database"
+	@echo "  clean           - Clean build artifacts"
 
 run:
 	@go run cmd/server/main.go
@@ -22,8 +25,8 @@ dev:
 
 build:
 	@mkdir -p bin
-	@CGO_ENABLED=0 go build -ldflags="-s -w" -o bin/warehouse_system cmd/server/main.go
-	@echo "Built bin/warehouse_system"
+	@CGO_ENABLED=0 go build -ldflags="-s -w" -o bin/tawseela cmd/server/main.go
+	@echo "Built bin/tawseela"
 
 test:
 	@go test -v ./...
@@ -33,11 +36,26 @@ test-cover:
 	@go tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report: coverage.html"
 
-migrate-up:
-	@goose -dir internal/database/migrations postgres "$$(DATABASE_URL)" up
+migrate:
+	@chmod +x scripts/migrate.sh
+	@./scripts/migrate.sh
 
-migrate-down:
-	@goose -dir internal/database/migrations postgres "$$(DATABASE_URL)" down
+migrate-status:
+	@chmod +x scripts/migrate.sh
+	@./scripts/migrate.sh --status
+
+migrate-rollback:
+	@chmod +x scripts/migrate.sh
+	@./scripts/migrate.sh --rollback $(or $(N),1)
+
+migrate-dry-run:
+	@chmod +x scripts/migrate.sh
+	@./scripts/migrate.sh --dry-run
+
+migrate-force:
+	@chmod +x scripts/migrate.sh
+	@echo "⚠️  WARNING: This will force re-apply all migrations!"
+	@./scripts/migrate.sh --force
 
 seed:
 	@go run cmd/seed/main.go
@@ -45,3 +63,7 @@ seed:
 clean:
 	@rm -rf bin/ dist/ coverage.out coverage.html
 	@echo "Cleaned build artifacts"
+
+sqlc:
+	@sqlc generate
+	@echo "Generated SQL code with sqlc"

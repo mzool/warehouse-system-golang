@@ -4,9 +4,11 @@ import (
 	"log"
 	"log/slog"
 	"os"
+	"time"
 
 	"warehouse_system/api/routes"
 	"warehouse_system/internal/config"
+	dbq "warehouse_system/internal/database/db"
 	"warehouse_system/internal/router"
 )
 
@@ -23,12 +25,21 @@ func main() {
 	}
 
 	// Initialize database connection if needed
-	// dbConfig := config.DefaultDBConfig(cfg.Database.URL)
-	// db, err := config.NewPool(dbConfig)
-	// if err != nil {
-	// 	log.Fatalf("Failed to connect to database: %v", err)
-	// }
-	// defer db.Close()
+	dbConfig := config.DBConfig{
+		DatabaseURL:       cfg.Database.URL,
+		Logger:            logger,
+		MaxConns:          10,
+		MinConns:          2,
+		HealthCheckPeriod: time.Minute,
+		ConnectTimeout:    5 * time.Second,
+		MaxRetries:        3,
+		RetryDelay:        time.Second,
+	}
+	db, err := config.NewPool(&dbConfig)
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+	defer db.Close()
 
 	// Setup router configuration
 	routerConfig := &router.RouterConfig{
@@ -51,9 +62,9 @@ func main() {
 
 	// Create router
 	r := router.NewRouter(routerConfig, logger)
-
+	queries := dbq.New(db)
 	// Register application routes
-	routes.SetupRoutes(r)
+	routes.SetupRoutes(r, db, queries, logger, nil)
 
 	logger.Info("Starting server", "port", cfg.Server.Port)
 

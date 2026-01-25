@@ -2,7 +2,6 @@ package views
 
 import (
 	"html/template"
-	"net/http"
 	"os"
 	"path/filepath"
 
@@ -22,35 +21,53 @@ func init() {
 		"sub": func(a, b int) int { return a - b },
 		"mul": func(a, b int) int { return a * b },
 		"div": func(a, b int) int {
-			if b == 0 { return 0 }
+			if b == 0 {
+				return 0
+			}
 			return a / b
 		},
 	})
 	err = filepath.Walk("web/templates", func(path string, info os.FileInfo, err error) error {
-		if err != nil { return err }
+		if err != nil {
+			return err
+		}
 		if !info.IsDir() && filepath.Ext(path) == ".html" {
 			templates, err = templates.ParseFiles(path)
-			if err != nil { return err }
+			if err != nil {
+				return err
+			}
 		}
 		return nil
 	})
-	if err != nil { panic(err) }
-}
-
-// RenderDocs_docs handles /docs
-func RenderDocs_docs(w http.ResponseWriter, r *http.Request) {
-	if err := templates.ExecuteTemplate(w, "docs", nil); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	if err != nil {
+		panic(err)
 	}
 }
 
 // RegisterRoutes registers all template routes with the router
 func RegisterRoutes(r router.Router) {
 	r.Register(&router.Route{
-		Method:      "GET",
-		Path:        "/docs",
-		Category:    "Templates",
-		HandlerFunc: RenderDocs_docs,
-		Input:       &router.RouteInput{RequiredAuth: false},
+		Method:       "GET",
+		Path:         "/docs",
+		Category:     "Templates",
+		TemplateName: "docs",
+		RawPath:      true,
+		Input:        &router.RouteInput{RequiredAuth: false},
+	})
+	r.Register(&router.Route{
+		Method:       "GET",
+		Path:         "/login",
+		Category:     "Templates",
+		TemplateName: "login",
+		RawPath:      true,
+		Input:        &router.RouteInput{RequiredAuth: false},
+	})
+	r.Register(&router.Route{
+		Method:       "GET",
+		Path:         "/profile",
+		Category:     "Templates",
+		TemplateName: "profile",
+		RawPath:      true,
+		Input:        &router.RouteInput{RequiredAuth: false},
 	})
 }
