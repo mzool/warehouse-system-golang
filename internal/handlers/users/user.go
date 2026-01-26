@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
+	"time"
 	"warehouse_system/internal/config"
 	db "warehouse_system/internal/database/db"
 	"warehouse_system/internal/middlewares"
@@ -130,6 +132,7 @@ func (u *UserHandler) ViewMyProfile(w http.ResponseWriter, r *http.Request) {
 	var userID int32
 	_, err := fmt.Sscanf(session.UserID, "%d", &userID)
 	if err != nil {
+		u.h.Logger.Error("Failed to parse user ID", "error", err, "user_id_string", session.UserID)
 		config.RespondJSON(w, http.StatusBadRequest, map[string]string{
 			"error": "Invalid user ID",
 		})
@@ -277,23 +280,10 @@ func (u *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get user by email
-	user, err := u.h.Queries.GetUserByEmail(context.Background(), req.Email)
+	// Get user auth
+	userAuth, err := u.h.Queries.GetUserAuth(context.Background(), req.Email)
 	if err != nil {
-		u.h.Logger.Error("Failed to get user by email", "error", err, "email", req.Email)
-		config.RespondJSON(w, http.StatusUnauthorized, map[string]string{
-			"error": "Invalid email or password",
-		})
-		return
-	}
-
-	// Get user password hash
-	var userPasswordHash string
-	err = u.h.DB.QueryRow(r.Context(), `
-		SELECT password_hash FROM users WHERE id = $1
-	`, user.ID).Scan(&userPasswordHash)
-	if err != nil {
-		u.h.Logger.Error("Failed to get password hash", "error", err, "user_id", user.ID)
+		u.h.Logger.Warn("Login attempt with unknown email", "email", req.Email)
 		config.RespondJSON(w, http.StatusUnauthorized, map[string]string{
 			"error": "Invalid email or password",
 		})
@@ -301,14 +291,16 @@ func (u *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Verify password
-	correct, err := security.VerifyPassword(req.Password, userPasswordHash)
+	correct, err := security.VerifyPassword(req.Password, userAuth.PasswordHash)
 	if err != nil {
 		u.h.Logger.Error("Password verification error", "error", err)
 		config.RespondJSON(w, http.StatusInternalServerError, map[string]string{
-			"error": "Authentication error",
+			"error": "Internal server error, please try again later",
 		})
 		return
 	}
+
+	u.h.Logger.Info("Password verification result", "correct", correct)
 
 	if !correct {
 		u.h.Logger.Warn("Invalid password attempt", "email", req.Email)
@@ -319,27 +311,73 @@ func (u *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if user is active
-	if !user.IsActive.Bool {
+	if !userAuth.IsActive.Bool {
 		config.RespondJSON(w, http.StatusForbidden, map[string]string{
 			"error": "Account is deactivated",
 		})
 		return
 	}
 
-	// TODO: Create session and set cookie
-	// This should be implemented with the session middleware
-	// For now, return success with user info
+	ipAddress := middlewares.GetIp(r)
+	userAgent := r.UserAgent()
+	// log the login attempt
+	u.h.Queries.LogAudit(r.Context(), db.LogAuditParams{
+		UserID:   pgtype.Int4{Int32: int32(userAuth.ID), Valid: true},
+		Username: pgtype.Text{String: userAuth.Username, Valid: true},
+		Action:   "login",
+		Entity:   "users",
+		Details:  []byte(fmt.Sprintf(`{"ip_address": "%s", "user_agent": "%s"}`, ipAddress, userAgent)),
+	})
 
-	u.h.Logger.Info("User logged in successfully", "email", req.Email, "user_id", user.ID)
+	sessionDuration := 24 * time.Hour
+	if req.Remember {
+		sessionDuration = 7 * 24 * time.Hour // 7 days
+	}
+	// Create session (simple config for handlers)
+	session, err := middlewares.NewSession(r.Context(), &middlewares.SimpleSessionCreator{
+		Cache:            u.h.Cache,
+		SecretKey:        []byte(u.h.CFG.Auth.SessionSecret),
+		SessionKeyPrefix: "session:",
+		SessionDuration:  sessionDuration,
+		Logger:           u.h.Logger,
+	}, strconv.Itoa(int(userAuth.ID)), userAuth.Email, userAuth.Username, 2, r)
+	if err != nil {
+		u.h.Logger.Error("Failed to create session", "error", err)
+		config.RespondJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "Failed to create user session",
+		})
+		return
+	}
+
+	// Set session cookie
+	middlewares.SetSessionCookie(w, &middlewares.SessionConfig{
+		CookieName:      "session",
+		CookiePath:      "/",
+		CookieSecure:    true,
+		CookieHTTPOnly:  true,
+		CookieSameSite:  http.SameSiteLaxMode,
+		SessionDuration: 24 * time.Hour,
+	}, session)
+
+	// log
+	u.h.Logger.Info("User logged in successfully", "email", req.Email, "user_id", userAuth.ID)
 
 	config.RespondJSON(w, http.StatusOK, map[string]interface{}{
 		"message": "Login successful",
 		"user": map[string]interface{}{
-			"id":        user.ID,
-			"username":  user.Username,
-			"email":     user.Email,
-			"full_name": user.FullName,
-			"role":      user.Role,
+			"id":        userAuth.ID,
+			"username":  userAuth.Username,
+			"email":     userAuth.Email,
+			"full_name": userAuth.FullName,
+			"role":      userAuth.Role,
 		},
 	})
+}
+
+func (u *UserHandler) GetUserPermissionsRoles(ctx context.Context, userId string) (roles []string, permissions []string, authVersion int, err error) {
+	var role string
+	u.h.DB.QueryRow(ctx, `SELECT role from users where id = 1$`, userId).Scan(&role)
+
+	return roles, permissions, 1, nil
+
 }

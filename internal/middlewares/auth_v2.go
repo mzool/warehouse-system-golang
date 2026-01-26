@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"warehouse_system/internal/cache"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -35,14 +36,20 @@ const (
 
 // SessionConfig holds configuration for session-based authentication
 type SessionConfig struct {
-	// SessionStore handles session storage (Redis implementation)
-	SessionStore SessionStore
+	// Cache handles all caching (sessions, roles, permissions)
+	Cache cache.Cache
 
 	// RolePermissionProvider fetches roles and permissions from database
 	RolePermissionProvider RolePermissionProvider
 
 	// Secret key for signing session tokens (HMAC)
 	SecretKey []byte
+
+	// Cache key patterns
+	SessionKeyPrefix     string // Default: "session:"
+	RoleKeyPrefix        string // Default: "user:roles:"
+	PermissionKeyPrefix  string // Default: "user:perms:"
+	AuthVersionKeyPrefix string // Default: "user:authver:"
 
 	// Cookie configuration
 	CookieName     string
@@ -110,32 +117,147 @@ type UserSession struct {
 	MetaData    map[string]interface{}
 }
 
-// SessionStore interface for session storage (Redis implementation)
-type SessionStore interface {
-	// SaveSession saves session data to store
-	SaveSession(ctx context.Context, sessionID string, data *SessionData, ttl time.Duration) error
+// ============================================================================
+// Cache Helper Functions
+// ============================================================================
 
-	// GetSession retrieves session data from store
-	GetSession(ctx context.Context, sessionID string) (*SessionData, error)
+// saveSession saves session data to cache
+func saveSession(ctx context.Context, c cache.Cache, keyPrefix, sessionID string, data *SessionData, ttl time.Duration) error {
+	key := keyPrefix + sessionID
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return fmt.Errorf("failed to marshal session: %w", err)
+	}
+	return c.Set(ctx, key, jsonData, ttl)
+}
 
-	// DeleteSession removes session from store (logout/revoke)
-	DeleteSession(ctx context.Context, sessionID string) error
+// getSession retrieves session data from cache
+func getSession(ctx context.Context, c cache.Cache, keyPrefix, sessionID string) (*SessionData, error) {
+	key := keyPrefix + sessionID
+	data, err := c.Get(ctx, key)
+	if err != nil {
+		return nil, err
+	}
 
-	// RevokeUserSessions revokes all sessions for a user (e.g., after password change)
-	RevokeUserSessions(ctx context.Context, userID string) error
+	var session SessionData
+	if err := json.Unmarshal(data, &session); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal session: %w", err)
+	}
+	return &session, nil
+}
 
-	// UpdateSessionActivity updates last access time (sliding expiration)
-	UpdateSessionActivity(ctx context.Context, sessionID string) error
+// deleteSession removes session from cache
+func deleteSession(ctx context.Context, c cache.Cache, keyPrefix, sessionID string) error {
+	key := keyPrefix + sessionID
+	return c.Delete(ctx, key)
+}
 
-	// GetUserRolesPermissions retrieves cached roles and permissions
-	// Returns (roles, permissions, authVersion, found, error)
-	GetUserRolesPermissions(ctx context.Context, userID string) ([]string, []string, int, bool, error)
+// revokeUserSessions revokes all sessions for a user
+func revokeUserSessions(ctx context.Context, c cache.Cache, keyPrefix, userID string) error {
+	// Find all sessions for this user
+	pattern := keyPrefix + "*"
+	keys, err := c.Keys(ctx, pattern)
+	if err != nil {
+		return err
+	}
 
-	// CacheUserRolesPermissions caches roles and permissions with auth version
-	CacheUserRolesPermissions(ctx context.Context, userID string, roles, permissions []string, authVersion int, ttl time.Duration) error
+	// Filter sessions belonging to this user
+	var userKeys []string
+	for _, key := range keys {
+		data, err := c.Get(ctx, key)
+		if err != nil {
+			continue
+		}
+		var session SessionData
+		if err := json.Unmarshal(data, &session); err != nil {
+			continue
+		}
+		if session.UserID == userID {
+			userKeys = append(userKeys, key)
+		}
+	}
 
-	// GetUserAuthVersion retrieves user's current auth version from database
-	GetUserAuthVersion(ctx context.Context, userID string) (int, error)
+	if len(userKeys) > 0 {
+		return c.DeleteMulti(ctx, userKeys)
+	}
+	return nil
+}
+
+// updateSessionActivity updates last access time
+func updateSessionActivity(ctx context.Context, c cache.Cache, keyPrefix, sessionID string) error {
+	session, err := getSession(ctx, c, keyPrefix, sessionID)
+	if err != nil {
+		return err
+	}
+	session.LastAccessAt = time.Now()
+	return saveSession(ctx, c, keyPrefix, sessionID, session, 0) // 0 = keep existing TTL
+}
+
+// getUserRolesPermissions retrieves cached roles and permissions
+func getUserRolesPermissions(ctx context.Context, c cache.Cache, rolePrefix, permPrefix, authVerPrefix, userID string) ([]string, []string, int, bool, error) {
+	roleKey := rolePrefix + userID
+	permKey := permPrefix + userID
+	authVerKey := authVerPrefix + userID
+
+	// Get all data
+	results, err := c.GetMulti(ctx, []string{roleKey, permKey, authVerKey})
+	if err != nil {
+		return nil, nil, 0, false, err
+	}
+
+	// Check if all keys exist
+	roleData, roleExists := results[roleKey]
+	permData, permExists := results[permKey]
+	authVerData, authVerExists := results[authVerKey]
+
+	if !roleExists || !permExists {
+		return nil, nil, 0, false, nil
+	}
+
+	var roles, permissions []string
+	if err := json.Unmarshal(roleData, &roles); err != nil {
+		return nil, nil, 0, false, err
+	}
+	if err := json.Unmarshal(permData, &permissions); err != nil {
+		return nil, nil, 0, false, err
+	}
+
+	var authVersion int
+	if authVerExists {
+		if err := json.Unmarshal(authVerData, &authVersion); err != nil {
+			authVersion = 0
+		}
+	}
+
+	return roles, permissions, authVersion, true, nil
+}
+
+// cacheUserRolesPermissions caches roles and permissions
+func cacheUserRolesPermissions(ctx context.Context, c cache.Cache, rolePrefix, permPrefix, authVerPrefix, userID string, roles, permissions []string, authVersion int, ttl time.Duration) error {
+	roleKey := rolePrefix + userID
+	permKey := permPrefix + userID
+	authVerKey := authVerPrefix + userID
+
+	roleData, err := json.Marshal(roles)
+	if err != nil {
+		return err
+	}
+	permData, err := json.Marshal(permissions)
+	if err != nil {
+		return err
+	}
+	authVerData, err := json.Marshal(authVersion)
+	if err != nil {
+		return err
+	}
+
+	items := map[string][]byte{
+		roleKey:    roleData,
+		permKey:    permData,
+		authVerKey: authVerData,
+	}
+
+	return c.SetMulti(ctx, items, ttl)
 }
 
 // RolePermissionProvider interface for fetching roles/permissions from database
@@ -214,10 +336,68 @@ func validateSignedToken(signedToken string, secretKey []byte) (string, error) {
 // Session Management Functions
 // ============================================================================
 
-// CreateSession creates a new session for authenticated user
+// SimpleSessionCreator is a simplified config for creating sessions in handlers
+type SimpleSessionCreator struct {
+	Cache            cache.Cache
+	SecretKey        []byte
+	SessionKeyPrefix string        // Default: "session:"
+	SessionDuration  time.Duration // Default: 24h
+	Logger           *slog.Logger
+}
+
+// NewSession creates a new session with simplified config (for use in login handlers)
+func NewSession(ctx context.Context, creator *SimpleSessionCreator, userID, email, username string, authVersion int, r *http.Request) (string, error) {
+	if creator.Cache == nil {
+		return "", fmt.Errorf("cache not configured")
+	}
+
+	// Set defaults
+	if creator.SessionKeyPrefix == "" {
+		creator.SessionKeyPrefix = "session:"
+	}
+	if creator.SessionDuration == 0 {
+		creator.SessionDuration = 24 * time.Hour
+	}
+	if creator.Logger == nil {
+		creator.Logger = slog.Default()
+	}
+
+	// Generate signed session token
+	signedToken, err := createSignedSessionToken(creator.SecretKey)
+	if err != nil {
+		creator.Logger.Error("Failed to generate session token", "error", err)
+		return "", fmt.Errorf("failed to create session")
+	}
+
+	// Create session data
+	now := time.Now()
+	sessionData := &SessionData{
+		UserID:       userID,
+		Email:        email,
+		Username:     username,
+		IsActive:     true,
+		AuthVersion:  authVersion,
+		CreatedAt:    now,
+		ExpiresAt:    now.Add(creator.SessionDuration),
+		LastAccessAt: now,
+		IPAddress:    getClientIP(r),
+		UserAgent:    r.UserAgent(),
+	}
+
+	// Save to cache
+	if err := saveSession(ctx, creator.Cache, creator.SessionKeyPrefix, signedToken, sessionData, creator.SessionDuration); err != nil {
+		creator.Logger.Error("Failed to save session", "error", err, "user_id", userID)
+		return "", fmt.Errorf("failed to create session")
+	}
+
+	creator.Logger.Info("Session created", "user_id", userID, "email", email, "ip", sessionData.IPAddress, "auth_version", authVersion)
+	return signedToken, nil
+}
+
+// CreateSession creates a new session for authenticated user (legacy, kept for backward compatibility)
 func CreateSession(ctx context.Context, config *SessionConfig, userID, email, username string, authVersion int, r *http.Request) (string, error) {
-	if config.SessionStore == nil {
-		return "", fmt.Errorf("session store not configured")
+	if config.Cache == nil {
+		return "", fmt.Errorf("cache not configured")
 	}
 
 	// Generate signed session token
@@ -242,8 +422,8 @@ func CreateSession(ctx context.Context, config *SessionConfig, userID, email, us
 		UserAgent:    r.UserAgent(),
 	}
 
-	// Save to store
-	if err := config.SessionStore.SaveSession(ctx, signedToken, sessionData, config.SessionDuration); err != nil {
+	// Save to cache
+	if err := saveSession(ctx, config.Cache, config.SessionKeyPrefix, signedToken, sessionData, config.SessionDuration); err != nil {
 		config.Logger.Error("Failed to save session", "error", err, "user_id", userID)
 		return "", fmt.Errorf("failed to create session")
 	}
@@ -254,8 +434,8 @@ func CreateSession(ctx context.Context, config *SessionConfig, userID, email, us
 
 // RevokeSession revokes a specific session
 func RevokeSession(ctx context.Context, config *SessionConfig, sessionToken string) error {
-	if config.SessionStore == nil {
-		return fmt.Errorf("session store not configured")
+	if config.Cache == nil {
+		return fmt.Errorf("cache not configured")
 	}
 
 	// Validate token signature first
@@ -264,7 +444,7 @@ func RevokeSession(ctx context.Context, config *SessionConfig, sessionToken stri
 		return fmt.Errorf("invalid session token")
 	}
 
-	if err := config.SessionStore.DeleteSession(ctx, sessionToken); err != nil {
+	if err := deleteSession(ctx, config.Cache, config.SessionKeyPrefix, sessionToken); err != nil {
 		config.Logger.Error("Failed to revoke session", "error", err)
 		return fmt.Errorf("failed to revoke session")
 	}
@@ -275,11 +455,11 @@ func RevokeSession(ctx context.Context, config *SessionConfig, sessionToken stri
 
 // RevokeUserSessions revokes all sessions for a user
 func RevokeUserSessions(ctx context.Context, config *SessionConfig, userID string) error {
-	if config.SessionStore == nil {
-		return fmt.Errorf("session store not configured")
+	if config.Cache == nil {
+		return fmt.Errorf("cache not configured")
 	}
 
-	if err := config.SessionStore.RevokeUserSessions(ctx, userID); err != nil {
+	if err := revokeUserSessions(ctx, config.Cache, config.SessionKeyPrefix, userID); err != nil {
 		config.Logger.Error("Failed to revoke user sessions", "error", err, "user_id", userID)
 		return fmt.Errorf("failed to revoke sessions")
 	}
@@ -324,9 +504,13 @@ func AuthenticateUser(ctx context.Context, config *SessionConfig, email, passwor
 // DefaultSessionConfig returns default session configuration
 func DefaultSessionConfig() *SessionConfig {
 	return &SessionConfig{
+		SessionKeyPrefix:             "session:",
+		RoleKeyPrefix:                "user:roles:",
+		PermissionKeyPrefix:          "user:perms:",
+		AuthVersionKeyPrefix:         "user:authver:",
 		CookieName:                   "session",
 		CookiePath:                   "/",
-		CookieSecure:                 true, // Set to true in production
+		CookieSecure:                 true,
 		CookieHTTPOnly:               true,
 		CookieSameSite:               http.SameSiteLaxMode,
 		SessionDuration:              24 * time.Hour,
@@ -342,17 +526,60 @@ func DefaultSessionConfig() *SessionConfig {
 }
 
 // defaultSessionErrorHandler is the default error handler
+// It intelligently handles both API and UI routes
 func defaultSessionErrorHandler(w http.ResponseWriter, r *http.Request, err error) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusUnauthorized)
+	// Check if this is an API request or UI request
+	if isAPIRequest(r) {
+		// API request - return JSON
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
 
-	// Don't expose internal errors to client
-	response := map[string]interface{}{
-		"error":   "Unauthorized",
-		"message": "Authentication required",
+		response := map[string]interface{}{
+			"error":   "Unauthorized",
+			"message": "Authentication required",
+		}
+		json.NewEncoder(w).Encode(response)
+	} else {
+		// UI request - redirect to login
+		http.Redirect(w, r, "/login?redirect="+r.URL.Path, http.StatusSeeOther)
+	}
+}
+
+// isAPIRequest determines if a request is for an API endpoint or a UI page
+func isAPIRequest(r *http.Request) bool {
+	// Check 1: Path-based detection
+	path := r.URL.Path
+	if strings.HasPrefix(path, "/api/") {
+		return true
 	}
 
-	json.NewEncoder(w).Encode(response)
+	// Check 2: Accept header prefers JSON
+	accept := r.Header.Get("Accept")
+	if accept != "" {
+		// If explicitly accepts JSON and doesn't accept HTML, it's an API request
+		acceptsJSON := strings.Contains(accept, "application/json")
+		acceptsHTML := strings.Contains(accept, "text/html")
+
+		if acceptsJSON && !acceptsHTML {
+			return true
+		}
+	}
+
+	// Check 3: Content-Type is JSON (for POST/PUT/PATCH requests)
+	if r.Method != "GET" && r.Method != "HEAD" {
+		contentType := r.Header.Get("Content-Type")
+		if strings.Contains(contentType, "application/json") {
+			return true
+		}
+	}
+
+	// Check 4: X-Requested-With header (AJAX requests)
+	if r.Header.Get("X-Requested-With") == "XMLHttpRequest" {
+		return true
+	}
+
+	// Default: treat as UI request
+	return false
 }
 
 // SessionAuth returns a session-based authentication middleware
@@ -376,6 +603,18 @@ func SessionAuth(config *SessionConfig) func(next http.Handler) http.Handler {
 	}
 	if config.RoleCacheDuration == 0 {
 		config.RoleCacheDuration = 15 * time.Minute
+	}
+	if config.SessionKeyPrefix == "" {
+		config.SessionKeyPrefix = "session:"
+	}
+	if config.RoleKeyPrefix == "" {
+		config.RoleKeyPrefix = "user:roles:"
+	}
+	if config.PermissionKeyPrefix == "" {
+		config.PermissionKeyPrefix = "user:perms:"
+	}
+	if config.AuthVersionKeyPrefix == "" {
+		config.AuthVersionKeyPrefix = "user:authver:"
 	}
 
 	return func(next http.Handler) http.Handler {
@@ -413,10 +652,10 @@ func SessionAuth(config *SessionConfig) func(next http.Handler) http.Handler {
 				return
 			}
 
-			// Get session data from store
-			sessionData, err := config.SessionStore.GetSession(ctx, sessionToken)
+			// Get session data from cache
+			sessionData, err := getSession(ctx, config.Cache, config.SessionKeyPrefix, sessionToken)
 			if err != nil {
-				config.Logger.Debug("Session not found in store", "error", err)
+				config.Logger.Debug("Session not found in cache", "error", err)
 				config.ErrorHandler(w, r, fmt.Errorf("session expired or invalid"))
 				return
 			}
@@ -453,7 +692,7 @@ func SessionAuth(config *SessionConfig) func(next http.Handler) http.Handler {
 				updateCtx, cancel := context.WithTimeout(context.Background(), timeout)
 				defer cancel()
 
-				if err := config.SessionStore.UpdateSessionActivity(updateCtx, sessionToken); err != nil {
+				if err := updateSessionActivity(updateCtx, config.Cache, config.SessionKeyPrefix, sessionToken); err != nil {
 					config.Logger.Debug("Failed to update session activity", "error", err)
 				}
 			}()
@@ -558,8 +797,8 @@ func SessionAuth(config *SessionConfig) func(next http.Handler) http.Handler {
 // getRolesAndPermissions fetches roles/permissions with caching and auth version
 func getRolesAndPermissions(ctx context.Context, config *SessionConfig, userID string) ([]string, []string, int, error) {
 	// Try cache first
-	if config.SessionStore != nil {
-		roles, permissions, authVersion, found, err := config.SessionStore.GetUserRolesPermissions(ctx, userID)
+	if config.Cache != nil {
+		roles, permissions, authVersion, found, err := getUserRolesPermissions(ctx, config.Cache, config.RoleKeyPrefix, config.PermissionKeyPrefix, config.AuthVersionKeyPrefix, userID)
 		if err == nil && found {
 			config.Logger.Debug("Roles/permissions retrieved from cache",
 				"user_id", userID,
@@ -582,7 +821,7 @@ func getRolesAndPermissions(ctx context.Context, config *SessionConfig, userID s
 	}
 
 	// Cache the result with timeout control
-	if config.SessionStore != nil {
+	if config.Cache != nil {
 		go func() {
 			timeout := config.RoleCacheUpdateTimeout
 			if timeout == 0 {
@@ -591,7 +830,7 @@ func getRolesAndPermissions(ctx context.Context, config *SessionConfig, userID s
 			cacheCtx, cancel := context.WithTimeout(context.Background(), timeout)
 			defer cancel()
 
-			if err := config.SessionStore.CacheUserRolesPermissions(cacheCtx, userID, roles, permissions, authVersion, config.RoleCacheDuration); err != nil {
+			if err := cacheUserRolesPermissions(cacheCtx, config.Cache, config.RoleKeyPrefix, config.PermissionKeyPrefix, config.AuthVersionKeyPrefix, userID, roles, permissions, authVersion, config.RoleCacheDuration); err != nil {
 				config.Logger.Debug("Failed to cache roles/permissions", "error", err, "user_id", userID)
 			}
 		}()
@@ -828,5 +1067,60 @@ func UserIDToString(id interface{}) string {
 		return strconv.FormatUint(v, 10)
 	default:
 		return fmt.Sprintf("%v", id)
+	}
+}
+
+// ============================================================================
+// Specialized Error Handlers
+// ============================================================================
+
+// NewAPIErrorHandler creates an error handler that always returns JSON (for API routes)
+func NewAPIErrorHandler() func(w http.ResponseWriter, r *http.Request, err error) {
+	return func(w http.ResponseWriter, r *http.Request, err error) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+
+		response := map[string]interface{}{
+			"error":   "Unauthorized",
+			"message": "Authentication required",
+		}
+		json.NewEncoder(w).Encode(response)
+	}
+}
+
+// NewUIErrorHandler creates an error handler that redirects to login (for UI routes)
+func NewUIErrorHandler(loginPath string) func(w http.ResponseWriter, r *http.Request, err error) {
+	if loginPath == "" {
+		loginPath = "/login"
+	}
+	return func(w http.ResponseWriter, r *http.Request, err error) {
+		// Redirect to login with the original URL as redirect parameter
+		redirectURL := loginPath + "?redirect=" + r.URL.Path
+		http.Redirect(w, r, redirectURL, http.StatusSeeOther)
+	}
+}
+
+// NewSmartErrorHandler creates an error handler that detects API vs UI requests
+// This is the default behavior
+func NewSmartErrorHandler(loginPath string) func(w http.ResponseWriter, r *http.Request, err error) {
+	if loginPath == "" {
+		loginPath = "/login"
+	}
+	return func(w http.ResponseWriter, r *http.Request, err error) {
+		if isAPIRequest(r) {
+			// API request - return JSON
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+
+			response := map[string]interface{}{
+				"error":   "Unauthorized",
+				"message": "Authentication required",
+			}
+			json.NewEncoder(w).Encode(response)
+		} else {
+			// UI request - redirect to login
+			redirectURL := loginPath + "?redirect=" + r.URL.Path
+			http.Redirect(w, r, redirectURL, http.StatusSeeOther)
+		}
 	}
 }

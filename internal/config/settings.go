@@ -24,6 +24,7 @@ type Config struct {
 	Email      EmailConfig
 	Rendering  RenderingConfig
 	OpenAI     OpenAIConfig
+	Redis      RedisConfig
 }
 
 // AppConfig holds application-level settings
@@ -64,6 +65,7 @@ type TLSConfig struct {
 type AuthConfig struct {
 	JWTSecret           string
 	DefaultUserPassword string
+	SessionSecret       string
 }
 
 // CORSConfig holds CORS middleware settings
@@ -104,6 +106,12 @@ type OpenAIConfig struct {
 	APIKey string
 }
 
+type RedisConfig struct {
+	Addr     string
+	Password string
+	DB       int
+}
+
 // LoadConfig loads configuration from environment variables
 // Returns Config struct and error instead of mutating global state
 func LoadConfig(logger *slog.Logger) (*Config, error) {
@@ -142,7 +150,7 @@ func LoadConfig(logger *slog.Logger) (*Config, error) {
 	loadEmailConfig(&config.Email, logger)
 	loadRenderingConfig(&config.Rendering, logger)
 	loadOpenAIConfig(&config.OpenAI, logger)
-
+	loadRedisConfig(&config.Redis, logger)
 	logger.Info("configuration loaded successfully",
 		"environment", config.App.Environment,
 		"version", config.App.Version,
@@ -260,6 +268,12 @@ func loadAuthConfig(cfg *AuthConfig, logger *slog.Logger) error {
 	}
 	cfg.DefaultUserPassword = defaultPassword
 
+	sessionSecret := os.Getenv("SESSION_SECRET")
+	if sessionSecret == "" {
+		return fmt.Errorf("SESSION_SECRET environment variable is required")
+	}
+	cfg.SessionSecret = sessionSecret
+
 	return nil
 }
 
@@ -348,6 +362,16 @@ func loadOpenAIConfig(cfg *OpenAIConfig, logger *slog.Logger) {
 	cfg.APIKey = os.Getenv("OPENAI_API_KEY")
 	if cfg.APIKey != "" {
 		logger.Debug("OpenAI API key loaded")
+	}
+}
+
+func loadRedisConfig(cfg *RedisConfig, logger *slog.Logger) {
+	cfg.Addr = os.Getenv("REDIS_ADDR")
+	cfg.Password = os.Getenv("REDIS_PASSWORD")
+	cfg.DB = getEnvAsInt("REDIS_DB", 0)
+
+	if cfg.Addr != "" {
+		logger.Debug("Redis config loaded", "addr", cfg.Addr, "db", cfg.DB)
 	}
 }
 

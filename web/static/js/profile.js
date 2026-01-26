@@ -115,7 +115,10 @@
         try {
             const response = await fetch('/api/v1/profile', {
                 method: 'GET',
-                credentials: 'include'
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
             });
 
             if (!response.ok) {

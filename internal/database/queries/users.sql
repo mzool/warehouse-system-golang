@@ -63,3 +63,9 @@ UPDATE users
 SET is_active = TRUE,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1;
+
+
+-- name: GetUserAuth :one
+SELECT *
+FROM users
+WHERE email = $1;

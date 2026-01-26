@@ -61,9 +61,9 @@ type LoggerConfig struct {
 }
 
 // DefaultLoggerConfig creates a production-ready logger configuration with sensible defaults
-func DefaultLoggerConfig() *LoggerConfig {
+func DefaultLoggerConfig(l *slog.Logger) *LoggerConfig {
 	return &LoggerConfig{
-		Logger:              slog.Default(),
+		Logger:              l,
 		IncludeRequestBody:  false,
 		IncludeResponseBody: false,
 		MaxBodySize:         4096, // 4KB limit
@@ -79,7 +79,7 @@ func DefaultLoggerConfig() *LoggerConfig {
 func Logger(config *LoggerConfig) func(http.Handler) http.Handler {
 	// Use default configuration if none provided
 	if config == nil {
-		config = DefaultLoggerConfig()
+		config = DefaultLoggerConfig(slog.Default())
 	}
 
 	// Set defaults

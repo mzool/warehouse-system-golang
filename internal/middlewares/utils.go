@@ -46,6 +46,11 @@ func getClientIP(r *http.Request) string {
 	return ip
 }
 
+// GetIp is a helper function to get client IP from request
+func GetIp(r *http.Request) string {
+	return getClientIP(r)
+}
+
 // max returns the maximum of two integers
 func max(a, b int) int {
 	if a > b {

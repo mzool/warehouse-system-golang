@@ -10,14 +10,31 @@ import (
 
 type Querier interface {
 	ActivateUser(ctx context.Context, id int32) error
+	CountCategories(ctx context.Context) (int64, error)
+	CountUnits(ctx context.Context) (int64, error)
 	CountUsers(ctx context.Context) (int64, error)
+	CreateCategory(ctx context.Context, arg CreateCategoryParams) (MaterialCategory, error)
+	CreateUnit(ctx context.Context, arg CreateUnitParams) (MeasureUnit, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error)
 	DeactivateUser(ctx context.Context, id int32) error
+	DeleteCategory(ctx context.Context, id int32) error
+	DeleteUnit(ctx context.Context, id int32) error
 	DeleteUser(ctx context.Context, id int32) error
+	GetCategoryByID(ctx context.Context, id int32) (MaterialCategory, error)
+	GetUnitByAbbreviation(ctx context.Context, abbreviation string) (MeasureUnit, error)
+	GetUnitByID(ctx context.Context, id int32) (MeasureUnit, error)
+	GetUnitByName(ctx context.Context, name string) (MeasureUnit, error)
+	GetUserAuth(ctx context.Context, email string) (User, error)
 	GetUserByEmail(ctx context.Context, email string) (GetUserByEmailRow, error)
 	GetUserByID(ctx context.Context, id int32) (GetUserByIDRow, error)
 	GetUserByUsername(ctx context.Context, username string) (GetUserByUsernameRow, error)
+	ListCategories(ctx context.Context, arg ListCategoriesParams) ([]MaterialCategory, error)
+	ListMonthAuditLogs(ctx context.Context, arg ListMonthAuditLogsParams) ([]AuditLog, error)
+	ListUnits(ctx context.Context, arg ListUnitsParams) ([]MeasureUnit, error)
 	ListUsers(ctx context.Context, arg ListUsersParams) ([]ListUsersRow, error)
+	LogAudit(ctx context.Context, arg LogAuditParams) error
+	UpdateCategory(ctx context.Context, arg UpdateCategoryParams) (MaterialCategory, error)
+	UpdateUnit(ctx context.Context, arg UpdateUnitParams) (MeasureUnit, error)
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (UpdateUserRow, error)
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
 }

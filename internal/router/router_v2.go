@@ -1411,6 +1411,17 @@ func (r *RouterImpl) checkRouteConflict(pattern string, domain string, route *Ro
 
 // wrapWithContextEnrichment adds domain/tenant/route context to requests and handles metering
 func (r *RouterImpl) wrapWithContextEnrichment(handler http.HandlerFunc, domain, basePath, version string, route *Route) http.HandlerFunc {
+	// Safety check for nil handler
+	if handler == nil {
+		r.logger.Error("nil handler passed to wrapWithContextEnrichment",
+			"method", route.Method,
+			"path", route.Path,
+			"category", route.Category)
+		return func(w http.ResponseWriter, req *http.Request) {
+			http.Error(w, "Internal Server Error: Handler not configured", http.StatusInternalServerError)
+		}
+	}
+
 	return func(w http.ResponseWriter, req *http.Request) {
 		ctx := req.Context()
 		start := time.Now()

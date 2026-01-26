@@ -3,8 +3,10 @@ package routes
 import (
 	"log/slog"
 	"warehouse_system/internal/cache"
+	"warehouse_system/internal/config"
 	"warehouse_system/internal/database/db"
 	"warehouse_system/internal/handlers"
+	"warehouse_system/internal/handlers/units"
 	"warehouse_system/internal/handlers/users"
 	"warehouse_system/internal/router"
 	"warehouse_system/web/views"
@@ -13,7 +15,7 @@ import (
 )
 
 // SetupRoutes registers all application routes
-func SetupRoutes(r *router.RouterImpl, db *pgxpool.Pool, q *db.Queries, logger *slog.Logger, cache cache.Cache) {
+func SetupRoutes(r *router.RouterImpl, db *pgxpool.Pool, q *db.Queries, logger *slog.Logger, cache cache.Cache, cfg *config.Config) {
 	// Health check route
 	r.Register(&router.Route{
 		Method:      "GET",
@@ -26,12 +28,15 @@ func SetupRoutes(r *router.RouterImpl, db *pgxpool.Pool, q *db.Queries, logger *
 	views.RegisterRoutes(r)
 
 	// Add more routes here
-	ApiRoutes(r, db, q, logger, cache)
+	ApiRoutes(r, db, q, logger, cache, cfg)
 }
 
-func ApiRoutes(r *router.RouterImpl, db *pgxpool.Pool, q *db.Queries, logger *slog.Logger, cache cache.Cache) {
-	h := handlers.NewHandler(q, cache, logger, db)
+func ApiRoutes(r *router.RouterImpl, db *pgxpool.Pool, q *db.Queries, logger *slog.Logger, cache cache.Cache, cfg *config.Config) {
+	h := handlers.NewHandler(q, cache, logger, db, cfg)
+	// user handler
 	usersHandler := users.NewUserHandler(h)
+	// units handler
+	unitsHandler := units.NewUnitHandler(h)
 
 	// Authentication routes
 	r.Register(&router.Route{
@@ -41,7 +46,6 @@ func ApiRoutes(r *router.RouterImpl, db *pgxpool.Pool, q *db.Queries, logger *sl
 		Category:    "auth",
 		Input:       &router.RouteInput{RequiredAuth: false},
 	})
-
 	// User profile routes (require authentication)
 	r.Register(&router.Route{
 		Method:      "GET",
@@ -50,7 +54,6 @@ func ApiRoutes(r *router.RouterImpl, db *pgxpool.Pool, q *db.Queries, logger *sl
 		Category:    "users",
 		Input:       &router.RouteInput{RequiredAuth: true},
 	})
-
 	r.Register(&router.Route{
 		Method:      "PUT",
 		Path:        "/profile",
@@ -58,7 +61,6 @@ func ApiRoutes(r *router.RouterImpl, db *pgxpool.Pool, q *db.Queries, logger *sl
 		Category:    "users",
 		Input:       &router.RouteInput{RequiredAuth: true},
 	})
-
 	r.Register(&router.Route{
 		Method:      "POST",
 		Path:        "/profile/change-password",
@@ -67,4 +69,239 @@ func ApiRoutes(r *router.RouterImpl, db *pgxpool.Pool, q *db.Queries, logger *sl
 		Input:       &router.RouteInput{RequiredAuth: true},
 	})
 
+	// ______________________________units_______________________________________________
+	// Create Unit
+	r.Register(&router.Route{
+		Method:      "POST",
+		Path:        "/units",
+		HandlerFunc: unitsHandler.CreateUnit,
+		Category:    "units",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			Body: map[string]string{
+				"name":              "string (required) - Name of the measurement unit",
+				"abbreviation":      "string (required) - Short abbreviation (e.g., 'kg', 'm')",
+				"convertion_factor": "float64 (optional, default: 1.0) - Conversion factor to base unit",
+				"convert_to":        "int32 (optional) - ID of the unit to convert to",
+			},
+		},
+		Response: map[string]interface{}{
+			"success": map[string]interface{}{
+				"status": 201,
+				"body": map[string]string{
+					"id":                "int32 - Unit ID",
+					"name":              "string - Unit name",
+					"abbreviation":      "string - Unit abbreviation",
+					"convertion_factor": "numeric - Conversion factor",
+					"convert_to":        "int32 - Target unit ID",
+					"created_at":        "timestamp - Creation timestamp",
+					"updated_at":        "timestamp - Last update timestamp",
+				},
+			},
+			"error": map[string]interface{}{
+				"400": map[string]string{"error": "Name is required | Abbreviation is required | Invalid convertion factor"},
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// List Units
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/units",
+		HandlerFunc: unitsHandler.ListUnits,
+		Category:    "units",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			QueryParameters: map[string]string{
+				"page":  "int (optional, default: 1) - Page number",
+				"limit": "int (optional, default: 10) - Items per page",
+			},
+		},
+		Response: map[string]interface{}{
+			"success": map[string]interface{}{
+				"status": 200,
+				"body": map[string]interface{}{
+					"units": "array - List of unit objects",
+					"pagination": map[string]string{
+						"page":        "int - Current page",
+						"limit":       "int - Items per page",
+						"total":       "int - Total items",
+						"total_pages": "int - Total pages",
+					},
+				},
+			},
+			"error": map[string]interface{}{
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// Get Unit by ID
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/units/{id}",
+		HandlerFunc: unitsHandler.GetUnitByID,
+		Category:    "units",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			PathParameters: map[string]string{
+				"id": "int32 (required) - Unit ID",
+			},
+		},
+		Response: map[string]interface{}{
+			"success": map[string]interface{}{
+				"status": 200,
+				"body": map[string]string{
+					"id":                "int32 - Unit ID",
+					"name":              "string - Unit name",
+					"abbreviation":      "string - Unit abbreviation",
+					"convertion_factor": "numeric - Conversion factor",
+					"convert_to":        "int32 - Target unit ID",
+					"created_at":        "timestamp - Creation timestamp",
+					"updated_at":        "timestamp - Last update timestamp",
+				},
+			},
+			"error": map[string]interface{}{
+				"400": map[string]string{"error": "Missing unit ID | Invalid unit ID format"},
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"404": map[string]string{"error": "Unit not found"},
+			},
+		},
+	})
+
+	// Get Unit by Name
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/units/search/name",
+		HandlerFunc: unitsHandler.GetUnitByName,
+		Category:    "units",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			QueryParameters: map[string]string{
+				"name": "string (required) - Exact name of the unit to search",
+			},
+		},
+		Response: map[string]interface{}{
+			"success": map[string]interface{}{
+				"status": 200,
+				"body": map[string]string{
+					"id":                "int32 - Unit ID",
+					"name":              "string - Unit name",
+					"abbreviation":      "string - Unit abbreviation",
+					"convertion_factor": "numeric - Conversion factor",
+					"convert_to":        "int32 - Target unit ID",
+					"created_at":        "timestamp - Creation timestamp",
+					"updated_at":        "timestamp - Last update timestamp",
+				},
+			},
+			"error": map[string]interface{}{
+				"400": map[string]string{"error": "Missing unit name"},
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"404": map[string]string{"error": "Unit not found"},
+			},
+		},
+	})
+
+	// Get Unit by Abbreviation
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/units/search/abbreviation",
+		HandlerFunc: unitsHandler.GetUnitByAbbreviation,
+		Category:    "units",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			QueryParameters: map[string]string{
+				"abbreviation": "string (required) - Exact abbreviation of the unit to search",
+			},
+		},
+		Response: map[string]interface{}{
+			"success": map[string]interface{}{
+				"status": 200,
+				"body": map[string]string{
+					"id":                "int32 - Unit ID",
+					"name":              "string - Unit name",
+					"abbreviation":      "string - Unit abbreviation",
+					"convertion_factor": "numeric - Conversion factor",
+					"convert_to":        "int32 - Target unit ID",
+					"created_at":        "timestamp - Creation timestamp",
+					"updated_at":        "timestamp - Last update timestamp",
+				},
+			},
+			"error": map[string]interface{}{
+				"400": map[string]string{"error": "Missing unit abbreviation"},
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"404": map[string]string{"error": "Unit not found"},
+			},
+		},
+	})
+
+	// Update Unit
+	r.Register(&router.Route{
+		Method:      "PUT",
+		Path:        "/units/{id}",
+		HandlerFunc: unitsHandler.UpdateUnit,
+		Category:    "units",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			PathParameters: map[string]string{
+				"id": "int32 (required) - Unit ID to update",
+			},
+			Body: map[string]string{
+				"name":              "string (optional) - New name for the unit",
+				"abbreviation":      "string (optional) - New abbreviation",
+				"convertion_factor": "float64 (optional) - New conversion factor",
+				"convert_to":        "int32 (optional) - New target unit ID (if same as unit ID, factor is forced to 1.0)",
+			},
+		},
+		Response: map[string]interface{}{
+			"success": map[string]interface{}{
+				"status": 200,
+				"body": map[string]string{
+					"id":                "int32 - Unit ID",
+					"name":              "string - Updated unit name",
+					"abbreviation":      "string - Updated abbreviation",
+					"convertion_factor": "numeric - Updated conversion factor",
+					"convert_to":        "int32 - Updated target unit ID",
+					"created_at":        "timestamp - Creation timestamp",
+					"updated_at":        "timestamp - Last update timestamp",
+				},
+			},
+			"error": map[string]interface{}{
+				"400": map[string]string{"error": "Missing unit ID | Invalid unit ID format | Invalid request payload | Invalid convertion factor"},
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"404": map[string]string{"error": "Unit not found"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// Delete Unit
+	r.Register(&router.Route{
+		Method:      "DELETE",
+		Path:        "/units/{id}",
+		HandlerFunc: unitsHandler.DeleteUnit,
+		Category:    "units",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			PathParameters: map[string]string{
+				"id": "int32 (required) - Unit ID to delete",
+			},
+		},
+		Response: map[string]interface{}{
+			"success": map[string]interface{}{
+				"status": 200,
+				"body": map[string]string{
+					"message": "Unit deleted successfully",
+				},
+			},
+			"error": map[string]interface{}{
+				"400": map[string]string{"error": "Missing unit ID | Invalid unit ID format"},
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"500": map[string]string{"error": "Internal server error - May be referenced by other records"},
+			},
+		},
+	})
 }

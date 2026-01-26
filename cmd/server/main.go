@@ -3,12 +3,16 @@ package main
 import (
 	"log"
 	"log/slog"
+	"net/http"
 	"os"
 	"time"
 
 	"warehouse_system/api/routes"
+	"warehouse_system/internal/cache"
 	"warehouse_system/internal/config"
 	dbq "warehouse_system/internal/database/db"
+	"warehouse_system/internal/middlewares"
+	"warehouse_system/internal/observability"
 	"warehouse_system/internal/router"
 )
 
@@ -50,21 +54,130 @@ func main() {
 		Protocol: cfg.Server.Protocol,
 		Mode:     "dev",
 		Templates: &router.TemplateConfig{
-			Enabled: true,
+			Enabled: false,
 			Dir:     "web/templates",
 		},
 		Static: &router.StaticConfig{
-			Enabled:   true,
+			Enabled:   false,
 			Dir:       "web/static",
 			URLPrefix: "/static",
 		},
 	}
+	// Redis cache (no fallback)
+	cacheSystem, err := cache.NewRedisCache(&cache.RedisConfig{
+		Config: &cache.Config{
+			DefaultTTL: 30 * time.Minute,
+			Prefix:     "app:",
+			Enabled:    true,
+		},
+		Addr:         cfg.Redis.Addr,
+		Password:     cfg.Redis.Password,
+		DB:           cfg.Redis.DB,
+		MaxRetries:   3,
+		PoolSize:     10,
+		DialTimeout:  5 * time.Second,
+		ReadTimeout:  3 * time.Second,
+		WriteTimeout: 3 * time.Second,
+		Logger:       logger,
+	})
+	if err != nil {
+		logger.Error("Failed to initialize cache system", "error", err)
+		return
+	}
+	defer cacheSystem.Close()
 
-	// Create router
-	r := router.NewRouter(routerConfig, logger)
+	// 1. Recovery - Catch panics first (outermost middleware)
+	recoveryConfig := &middlewares.RecoveryConfig{
+		Logger:            logger,
+		Development:       cfg.App.Environment == "dev",
+		DisableStackTrace: false,
+	}
+
+	// 2. Request ID - For tracing and logging
+	requestIDConfig := &observability.RequestIDConfig{
+		Logger: logger,
+		Header: "X-Request-ID",
+	}
+
+	// 3. Logger - Log requests with request ID
+	loggerConfig := middlewares.DefaultLoggerConfig(logger)
+
+	// 4. Security Headers - Apply security headers early
+	securityConfig := &middlewares.SecurityConfig{
+		Logger:                logger,
+		XSSProtection:         "1; mode=block",
+		ContentTypeNosniff:    "nosniff",
+		XFrameOptions:         "DENY",
+		HSTSMaxAge:            31536000, // 1 year
+		HSTSIncludeSubdomains: true,
+		ContentSecurityPolicy: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'",
+		ReferrerPolicy:        "strict-origin-when-cross-origin",
+	}
+
+	// 5. CORS - Handle CORS requests
+	corsConfig := &middlewares.CORSConfig{
+		Logger:           logger,
+		AllowOrigins:     cfg.CORS.AllowedOrigins,
+		AllowMethods:     cfg.CORS.AllowedMethods,
+		AllowHeaders:     cfg.CORS.AllowedHeaders,
+		ExposeHeaders:    []string{"X-Request-ID", "X-Total-Count"},
+		AllowCredentials: true,
+		MaxAge:           3600,
+	}
+
+	// 6. Rate Limiter - Protect against abuse
+	rateLimiterConfig := &middlewares.RateLimitConfig{
+		Logger:     logger,
+		Cache:      cacheSystem,
+		Capacity:   100, // 100 requests
+		RefillRate: 5.0, // 5 requests per second
+		Message:    "Too many requests, please try again later",
+		StatusCode: http.StatusTooManyRequests,
+	}
+
+	// 7. Timeout - Prevent long-running requests
+	timeoutConfig := &middlewares.TimeoutConfig{
+		Logger:              logger,
+		Timeout:             30 * time.Second,
+		Message:             "Request timeout",
+		StatusCode:          http.StatusRequestTimeout,
+		SkipTimeoutForPaths: []string{"/health"},
+	}
+
+	// 8. Session Auth - Authentication and authorization
+	sessionConfig := &middlewares.SessionConfig{
+		Cache:                cacheSystem,
+		SecretKey:            []byte(cfg.Auth.SessionSecret),
+		SessionKeyPrefix:     "session:",
+		RoleKeyPrefix:        "user:roles:",
+		PermissionKeyPrefix:  "user:perms:",
+		AuthVersionKeyPrefix: "user:authver:",
+		CookieName:           "session",
+		CookiePath:           "/",
+		CookieSecure:         cfg.Server.Protocol == "https",
+		CookieHTTPOnly:       true,
+		CookieSameSite:       http.SameSiteLaxMode,
+		SessionDuration:      24 * time.Hour,
+		RoleCacheDuration:    15 * time.Minute,
+		Logger:               logger,
+		ErrorHandler:         middlewares.NewSmartErrorHandler("/login"), // Smart handler: JSON for API, redirect for UI
+		SkipPaths:            []string{"/api/v1/login", "/login", "/api/v1/register", "/register", "forget-password", "/api/v1/forget-password", "/health"},
+	}
+
+	// Request → Recovery → RequestID → Logger → Security → CORS → RateLimiter → Timeout → SessionAuth → Handler
+	r := router.NewRouter(routerConfig, logger,
+		middlewares.Recovery(recoveryConfig),     // 1. Catch panics
+		observability.RequestID(requestIDConfig), // 2. Add request ID
+		middlewares.Logger(loggerConfig),         // 3. Log requests
+		middlewares.Security(securityConfig),     // 4. Security headers
+		middlewares.CORS(corsConfig),             // 5. CORS
+		middlewares.RateLimit(rateLimiterConfig), // 6. Rate limiting
+		middlewares.Timeout(timeoutConfig),       // 7. Request timeout
+		middlewares.SessionAuth(sessionConfig),   // 8. Authentication
+	)
 	queries := dbq.New(db)
 	// Register application routes
-	routes.SetupRoutes(r, db, queries, logger, nil)
+	routes.SetupRoutes(r, db, queries, logger, cacheSystem, cfg)
 
 	logger.Info("Starting server", "port", cfg.Server.Port)
 
