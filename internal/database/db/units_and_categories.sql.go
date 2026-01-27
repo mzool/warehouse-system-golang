@@ -11,6 +11,32 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const checkUnitReferences = `-- name: CheckUnitReferences :one
+SELECT COUNT(*) AS count
+FROM measure_units
+WHERE convert_to = $1
+`
+
+func (q *Queries) CheckUnitReferences(ctx context.Context, convertTo pgtype.Int4) (int64, error) {
+	row := q.db.QueryRow(ctx, checkUnitReferences, convertTo)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const checkUnitUsedByMaterials = `-- name: CheckUnitUsedByMaterials :one
+SELECT COUNT(*) AS count
+FROM materials
+WHERE measure_unit_id = $1
+`
+
+func (q *Queries) CheckUnitUsedByMaterials(ctx context.Context, measureUnitID pgtype.Int4) (int64, error) {
+	row := q.db.QueryRow(ctx, checkUnitUsedByMaterials, measureUnitID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countCategories = `-- name: CountCategories :one
 SELECT COUNT(*) AS count
 FROM material_categories
@@ -134,6 +160,26 @@ func (q *Queries) GetCategoryByID(ctx context.Context, id int32) (MaterialCatego
 	return i, err
 }
 
+const getCategoryByName = `-- name: GetCategoryByName :one
+SELECT id, name, description, meta, created_at, updated_at
+FROM material_categories
+WHERE name = $1
+`
+
+func (q *Queries) GetCategoryByName(ctx context.Context, name string) (MaterialCategory, error) {
+	row := q.db.QueryRow(ctx, getCategoryByName, name)
+	var i MaterialCategory
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Description,
+		&i.Meta,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getUnitByAbbreviation = `-- name: GetUnitByAbbreviation :one
 SELECT id, name, abbreviation, convertion_factor, convert_to, created_at, updated_at
 FROM measure_units
@@ -237,9 +283,9 @@ func (q *Queries) ListCategories(ctx context.Context, arg ListCategoriesParams) 
 }
 
 const listUnits = `-- name: ListUnits :many
-SELECT id, name, abbreviation, convertion_factor, convert_to, created_at, updated_at
-FROM measure_units
-ORDER BY created_at DESC
+SELECT u.id, u.name, u.abbreviation, u.convertion_factor, u.convert_to, un.name as convert_to_name, u.created_at, u.updated_at
+FROM measure_units u LEFT JOIN measure_units un ON u.convert_to = un.id
+ORDER BY u.created_at DESC
 LIMIT $1 OFFSET $2
 `
 
@@ -248,21 +294,33 @@ type ListUnitsParams struct {
 	Offset int32 `json:"offset"`
 }
 
-func (q *Queries) ListUnits(ctx context.Context, arg ListUnitsParams) ([]MeasureUnit, error) {
+type ListUnitsRow struct {
+	ID               int32              `json:"id"`
+	Name             string             `json:"name"`
+	Abbreviation     string             `json:"abbreviation"`
+	ConvertionFactor pgtype.Numeric     `json:"convertion_factor"`
+	ConvertTo        pgtype.Int4        `json:"convert_to"`
+	ConvertToName    pgtype.Text        `json:"convert_to_name"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) ListUnits(ctx context.Context, arg ListUnitsParams) ([]ListUnitsRow, error) {
 	rows, err := q.db.Query(ctx, listUnits, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []MeasureUnit{}
+	items := []ListUnitsRow{}
 	for rows.Next() {
-		var i MeasureUnit
+		var i ListUnitsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,
 			&i.Abbreviation,
 			&i.ConvertionFactor,
 			&i.ConvertTo,
+			&i.ConvertToName,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -316,8 +374,8 @@ const updateUnit = `-- name: UpdateUnit :one
 UPDATE measure_units
 SET name = COALESCE($2, name),
     abbreviation = COALESCE($3, abbreviation),
-    convertion_factor = COALESCE($4, convertion_factor),
-    convert_to = COALESCE($5, convert_to),
+    convertion_factor = $4,
+    convert_to = $5,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
 RETURNING id, name, abbreviation, convertion_factor, convert_to, created_at, updated_at

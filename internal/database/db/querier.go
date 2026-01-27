@@ -6,21 +6,97 @@ package db
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Querier interface {
 	ActivateUser(ctx context.Context, id int32) error
+	ArchiveBOM(ctx context.Context, arg ArchiveBOMParams) (ArchiveBOMRow, error)
+	ArchiveMaterial(ctx context.Context, id int32) error
+	BatchCreateMaterials(ctx context.Context, arg []BatchCreateMaterialsParams) (int64, error)
+	BulkUpdateBOMPriority(ctx context.Context, arg BulkUpdateBOMPriorityParams) error
+	CheckBOMExists(ctx context.Context, arg CheckBOMExistsParams) (bool, error)
+	CheckDuplicateCode(ctx context.Context, arg CheckDuplicateCodeParams) (bool, error)
+	CheckDuplicateSKU(ctx context.Context, arg CheckDuplicateSKUParams) (bool, error)
+	CheckMaterialSaleable(ctx context.Context, id int32) (pgtype.Bool, error)
+	CheckUnitReferences(ctx context.Context, convertTo pgtype.Int4) (int64, error)
+	CheckUnitUsedByMaterials(ctx context.Context, measureUnitID pgtype.Int4) (int64, error)
+	CloneBOMVersion(ctx context.Context, arg CloneBOMVersionParams) error
+	CountBillsOfMaterials(ctx context.Context) (int64, error)
 	CountCategories(ctx context.Context) (int64, error)
+	CountCustomers(ctx context.Context) (int64, error)
+	CountMaterials(ctx context.Context, arg CountMaterialsParams) (int64, error)
+	CountPurchaseOrders(ctx context.Context) (int64, error)
+	CountSalesOrders(ctx context.Context) (int64, error)
+	CountSearchBillsOfMaterials(ctx context.Context, query pgtype.Text) (int64, error)
+	CountSearchCustomers(ctx context.Context, query pgtype.Text) (int64, error)
+	CountSearchPurchaseOrders(ctx context.Context, query pgtype.Text) (int64, error)
+	CountSearchSalesOrders(ctx context.Context, query pgtype.Text) (int64, error)
+	CountSearchSuppliers(ctx context.Context, query pgtype.Text) (int64, error)
+	CountSuppliers(ctx context.Context) (int64, error)
 	CountUnits(ctx context.Context) (int64, error)
 	CountUsers(ctx context.Context) (int64, error)
+	CreateBillOfMaterial(ctx context.Context, arg CreateBillOfMaterialParams) (CreateBillOfMaterialRow, error)
 	CreateCategory(ctx context.Context, arg CreateCategoryParams) (MaterialCategory, error)
+	CreateCustomer(ctx context.Context, arg CreateCustomerParams) (Customer, error)
+	CreateMaterial(ctx context.Context, arg CreateMaterialParams) (Material, error)
+	CreatePurchaseOrder(ctx context.Context, arg CreatePurchaseOrderParams) (PurchaseOrder, error)
+	CreatePurchaseOrderItem(ctx context.Context, arg CreatePurchaseOrderItemParams) (PurchaseOrderItem, error)
+	CreateSalesOrder(ctx context.Context, arg CreateSalesOrderParams) (SalesOrder, error)
+	CreateSalesOrderItem(ctx context.Context, arg CreateSalesOrderItemParams) (SalesOrderItem, error)
+	CreateSupplier(ctx context.Context, arg CreateSupplierParams) (Supplier, error)
 	CreateUnit(ctx context.Context, arg CreateUnitParams) (MeasureUnit, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error)
+	CreateWarehouse(ctx context.Context, arg CreateWarehouseParams) (Warehouse, error)
 	DeactivateUser(ctx context.Context, id int32) error
+	DeleteBillOfMaterial(ctx context.Context, id int32) error
+	DeleteBillOfMaterialsByComponent(ctx context.Context, componentMaterialID pgtype.Int4) error
+	DeleteBillOfMaterialsByFinishedMaterial(ctx context.Context, finishedMaterialID pgtype.Int4) error
 	DeleteCategory(ctx context.Context, id int32) error
+	DeleteCustomer(ctx context.Context, id int32) error
+	DeleteMaterial(ctx context.Context, id int32) error
+	DeletePurchaseOrder(ctx context.Context, id int32) error
+	DeletePurchaseOrderItem(ctx context.Context, id int32) error
+	DeleteSalesOrder(ctx context.Context, id int32) error
+	DeleteSalesOrderItem(ctx context.Context, id int32) error
+	DeleteSupplier(ctx context.Context, id int32) error
 	DeleteUnit(ctx context.Context, id int32) error
 	DeleteUser(ctx context.Context, id int32) error
+	DeleteWarehouse(ctx context.Context, id int32) error
+	ExportAllMaterials(ctx context.Context) ([]ExportAllMaterialsRow, error)
+	GetActiveBOMsByFinishedMaterial(ctx context.Context, finishedMaterialID pgtype.Int4) ([]GetActiveBOMsByFinishedMaterialRow, error)
+	GetBOMCostBreakdown(ctx context.Context, finishedMaterialID pgtype.Int4) ([]GetBOMCostBreakdownRow, error)
+	GetBOMTotalCost(ctx context.Context, finishedMaterialID pgtype.Int4) (interface{}, error)
+	GetBOMVersions(ctx context.Context, finishedMaterialID pgtype.Int4) ([]GetBOMVersionsRow, error)
+	GetBOMsBySupplier(ctx context.Context, supplierID pgtype.Int4) ([]GetBOMsBySupplierRow, error)
+	GetBOMsByVersion(ctx context.Context, arg GetBOMsByVersionParams) ([]GetBOMsByVersionRow, error)
+	GetBillOfMaterialByID(ctx context.Context, id int32) (GetBillOfMaterialByIDRow, error)
+	GetBillOfMaterialsByComponent(ctx context.Context, componentMaterialID pgtype.Int4) ([]GetBillOfMaterialsByComponentRow, error)
+	GetBillOfMaterialsByFinishedMaterial(ctx context.Context, finishedMaterialID pgtype.Int4) ([]GetBillOfMaterialsByFinishedMaterialRow, error)
 	GetCategoryByID(ctx context.Context, id int32) (MaterialCategory, error)
+	GetCategoryByName(ctx context.Context, name string) (MaterialCategory, error)
+	GetCustomerByEmail(ctx context.Context, contactEmail pgtype.Text) (Customer, error)
+	GetCustomerByID(ctx context.Context, id int32) (Customer, error)
+	GetCustomerByName(ctx context.Context, name string) (Customer, error)
+	GetCustomerByPhone(ctx context.Context, contactPhone pgtype.Text) (Customer, error)
+	GetMaterialByCode(ctx context.Context, code string) (GetMaterialByCodeRow, error)
+	GetMaterialByID(ctx context.Context, id int32) (GetMaterialByIDRow, error)
+	// ============================================================================
+	// GET MATERIAL BY SKU
+	// ============================================================================
+	GetMaterialBySKU(ctx context.Context, sku string) (GetMaterialBySKURow, error)
+	GetOptionalComponents(ctx context.Context, finishedMaterialID pgtype.Int4) ([]GetOptionalComponentsRow, error)
+	GetPurchaseOrderByID(ctx context.Context, id int32) (PurchaseOrder, error)
+	GetPurchaseOrderByOrderNumber(ctx context.Context, orderNumber string) (PurchaseOrder, error)
+	GetPurchaseOrderItemByID(ctx context.Context, id int32) (PurchaseOrderItem, error)
+	GetSalesOrderByID(ctx context.Context, id int32) (SalesOrder, error)
+	GetSalesOrderByOrderNumber(ctx context.Context, orderNumber string) (SalesOrder, error)
+	GetSalesOrderItemByID(ctx context.Context, id int32) (SalesOrderItem, error)
+	GetSupplierByEmail(ctx context.Context, contactEmail pgtype.Text) (Supplier, error)
+	GetSupplierByID(ctx context.Context, id int32) (Supplier, error)
+	GetSupplierByName(ctx context.Context, name string) (Supplier, error)
+	GetSupplierByPhone(ctx context.Context, contactPhone pgtype.Text) (Supplier, error)
 	GetUnitByAbbreviation(ctx context.Context, abbreviation string) (MeasureUnit, error)
 	GetUnitByID(ctx context.Context, id int32) (MeasureUnit, error)
 	GetUnitByName(ctx context.Context, name string) (MeasureUnit, error)
@@ -28,15 +104,57 @@ type Querier interface {
 	GetUserByEmail(ctx context.Context, email string) (GetUserByEmailRow, error)
 	GetUserByID(ctx context.Context, id int32) (GetUserByIDRow, error)
 	GetUserByUsername(ctx context.Context, username string) (GetUserByUsernameRow, error)
+	GetWarehouseByCode(ctx context.Context, code string) (Warehouse, error)
+	GetWarehouseByID(ctx context.Context, id int32) (Warehouse, error)
+	GetWarehouseByName(ctx context.Context, name string) (Warehouse, error)
+	ListActiveMaterials(ctx context.Context, arg ListActiveMaterialsParams) ([]ListActiveMaterialsRow, error)
+	ListBillsOfMaterials(ctx context.Context, arg ListBillsOfMaterialsParams) ([]ListBillsOfMaterialsRow, error)
 	ListCategories(ctx context.Context, arg ListCategoriesParams) ([]MaterialCategory, error)
+	ListCustomers(ctx context.Context, arg ListCustomersParams) ([]Customer, error)
 	ListMonthAuditLogs(ctx context.Context, arg ListMonthAuditLogsParams) ([]AuditLog, error)
-	ListUnits(ctx context.Context, arg ListUnitsParams) ([]MeasureUnit, error)
+	ListPurchaseOrderItems(ctx context.Context, purchaseOrderID pgtype.Int4) ([]PurchaseOrderItem, error)
+	ListPurchaseOrders(ctx context.Context, arg ListPurchaseOrdersParams) ([]PurchaseOrder, error)
+	ListPurchaseOrdersByStatus(ctx context.Context, arg ListPurchaseOrdersByStatusParams) ([]PurchaseOrder, error)
+	ListPurchaseOrdersBySupplier(ctx context.Context, arg ListPurchaseOrdersBySupplierParams) ([]PurchaseOrder, error)
+	ListSalesOrderItems(ctx context.Context, salesOrderID pgtype.Int4) ([]SalesOrderItem, error)
+	ListSalesOrders(ctx context.Context, arg ListSalesOrdersParams) ([]SalesOrder, error)
+	ListSalesOrdersByCustomer(ctx context.Context, arg ListSalesOrdersByCustomerParams) ([]SalesOrder, error)
+	ListSalesOrdersByStatus(ctx context.Context, arg ListSalesOrdersByStatusParams) ([]SalesOrder, error)
+	ListSuppliers(ctx context.Context, arg ListSuppliersParams) ([]Supplier, error)
+	ListUnits(ctx context.Context, arg ListUnitsParams) ([]ListUnitsRow, error)
 	ListUsers(ctx context.Context, arg ListUsersParams) ([]ListUsersRow, error)
+	ListWarehouses(ctx context.Context, arg ListWarehousesParams) ([]Warehouse, error)
 	LogAudit(ctx context.Context, arg LogAuditParams) error
+	RestoreMaterial(ctx context.Context, id int32) error
+	SearchBillsOfMaterials(ctx context.Context, arg SearchBillsOfMaterialsParams) ([]SearchBillsOfMaterialsRow, error)
+	SearchCustomers(ctx context.Context, arg SearchCustomersParams) ([]Customer, error)
+	// ============================================================================
+	// SEARCH MATERIALS (with filters and pagination)
+	// ============================================================================
+	SearchMaterials(ctx context.Context, arg SearchMaterialsParams) ([]SearchMaterialsRow, error)
+	SearchPurchaseOrders(ctx context.Context, arg SearchPurchaseOrdersParams) ([]PurchaseOrder, error)
+	SearchSalesOrders(ctx context.Context, arg SearchSalesOrdersParams) ([]SalesOrder, error)
+	SearchSuppliers(ctx context.Context, arg SearchSuppliersParams) ([]Supplier, error)
+	UnarchiveBOM(ctx context.Context, id int32) (UnarchiveBOMRow, error)
+	UpdateBOMActualCost(ctx context.Context, arg UpdateBOMActualCostParams) error
+	UpdateBillOfMaterial(ctx context.Context, arg UpdateBillOfMaterialParams) (UpdateBillOfMaterialRow, error)
 	UpdateCategory(ctx context.Context, arg UpdateCategoryParams) (MaterialCategory, error)
+	UpdateCustomer(ctx context.Context, arg UpdateCustomerParams) (Customer, error)
+	// ============================================================================
+	// UPDATE MATERIAL
+	// ============================================================================
+	UpdateMaterial(ctx context.Context, arg UpdateMaterialParams) (Material, error)
+	UpdatePurchaseOrder(ctx context.Context, arg UpdatePurchaseOrderParams) (PurchaseOrder, error)
+	UpdatePurchaseOrderItem(ctx context.Context, arg UpdatePurchaseOrderItemParams) (PurchaseOrderItem, error)
+	UpdatePurchaseOrderItemReceivedQuantity(ctx context.Context, arg UpdatePurchaseOrderItemReceivedQuantityParams) (PurchaseOrderItem, error)
+	UpdateSalesOrder(ctx context.Context, arg UpdateSalesOrderParams) (SalesOrder, error)
+	UpdateSalesOrderItem(ctx context.Context, arg UpdateSalesOrderItemParams) (SalesOrderItem, error)
+	UpdateSalesOrderItemShippedQuantity(ctx context.Context, arg UpdateSalesOrderItemShippedQuantityParams) (SalesOrderItem, error)
+	UpdateSupplier(ctx context.Context, arg UpdateSupplierParams) (Supplier, error)
 	UpdateUnit(ctx context.Context, arg UpdateUnitParams) (MeasureUnit, error)
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (UpdateUserRow, error)
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
+	UpdateWarehouse(ctx context.Context, arg UpdateWarehouseParams) (Warehouse, error)
 }
 
 var _ Querier = (*Queries)(nil)

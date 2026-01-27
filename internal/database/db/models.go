@@ -263,14 +263,33 @@ type Batch struct {
 }
 
 type BillsOfMaterial struct {
-	ID                  int32              `json:"id"`
-	FinishedMaterialID  pgtype.Int4        `json:"finished_material_id"`
-	ComponentMaterialID pgtype.Int4        `json:"component_material_id"`
-	Quantity            pgtype.Numeric     `json:"quantity"`
-	UnitMeasureID       pgtype.Int4        `json:"unit_measure_id"`
-	Meta                []byte             `json:"meta"`
-	CreatedAt           pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+	ID                   int32              `json:"id"`
+	FinishedMaterialID   pgtype.Int4        `json:"finished_material_id"`
+	ComponentMaterialID  pgtype.Int4        `json:"component_material_id"`
+	Quantity             pgtype.Numeric     `json:"quantity"`
+	UnitMeasureID        pgtype.Int4        `json:"unit_measure_id"`
+	Meta                 []byte             `json:"meta"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+	ScrapPercentage      pgtype.Numeric     `json:"scrap_percentage"`
+	FixedQuantity        pgtype.Bool        `json:"fixed_quantity"`
+	IsOptional           pgtype.Bool        `json:"is_optional"`
+	Priority             pgtype.Int4        `json:"priority"`
+	ReferenceDesignator  pgtype.Text        `json:"reference_designator"`
+	Notes                pgtype.Text        `json:"notes"`
+	EffectiveDate        pgtype.Date        `json:"effective_date"`
+	ExpiryDate           pgtype.Date        `json:"expiry_date"`
+	Version              pgtype.Text        `json:"version"`
+	OperationSequence    pgtype.Int4        `json:"operation_sequence"`
+	EstimatedCost        pgtype.Numeric     `json:"estimated_cost"`
+	ActualCost           pgtype.Numeric     `json:"actual_cost"`
+	LeadTimeDays         pgtype.Int4        `json:"lead_time_days"`
+	SupplierID           pgtype.Int4        `json:"supplier_id"`
+	AlternateComponentID pgtype.Int4        `json:"alternate_component_id"`
+	IsActive             pgtype.Bool        `json:"is_active"`
+	Archived             pgtype.Bool        `json:"archived"`
+	ArchivedAt           pgtype.Timestamptz `json:"archived_at"`
+	ArchivedBy           pgtype.Int4        `json:"archived_by"`
 }
 
 type Customer struct {
@@ -427,6 +446,62 @@ type User struct {
 	IsActive     pgtype.Bool        `json:"is_active"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
+type VBomCostAnalysis struct {
+	FinishedMaterialID    pgtype.Int4    `json:"finished_material_id"`
+	FinishedMaterialName  pgtype.Text    `json:"finished_material_name"`
+	FinishedMaterialCode  pgtype.Text    `json:"finished_material_code"`
+	FinishedMaterialPrice pgtype.Numeric `json:"finished_material_price"`
+	ComponentCount        int64          `json:"component_count"`
+	RawMaterialCost       int64          `json:"raw_material_cost"`
+	MaterialCostWithScrap int64          `json:"material_cost_with_scrap"`
+	EstimatedTotalCost    int64          `json:"estimated_total_cost"`
+	ActualTotalCost       int64          `json:"actual_total_cost"`
+	MaxLeadTimeDays       interface{}    `json:"max_lead_time_days"`
+	Version               pgtype.Text    `json:"version"`
+}
+
+type VEffectiveBom struct {
+	ID                     int32              `json:"id"`
+	FinishedMaterialID     pgtype.Int4        `json:"finished_material_id"`
+	ComponentMaterialID    pgtype.Int4        `json:"component_material_id"`
+	Quantity               pgtype.Numeric     `json:"quantity"`
+	UnitMeasureID          pgtype.Int4        `json:"unit_measure_id"`
+	Meta                   []byte             `json:"meta"`
+	CreatedAt              pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
+	ScrapPercentage        pgtype.Numeric     `json:"scrap_percentage"`
+	FixedQuantity          pgtype.Bool        `json:"fixed_quantity"`
+	IsOptional             pgtype.Bool        `json:"is_optional"`
+	Priority               pgtype.Int4        `json:"priority"`
+	ReferenceDesignator    pgtype.Text        `json:"reference_designator"`
+	Notes                  pgtype.Text        `json:"notes"`
+	EffectiveDate          pgtype.Date        `json:"effective_date"`
+	ExpiryDate             pgtype.Date        `json:"expiry_date"`
+	Version                pgtype.Text        `json:"version"`
+	OperationSequence      pgtype.Int4        `json:"operation_sequence"`
+	EstimatedCost          pgtype.Numeric     `json:"estimated_cost"`
+	ActualCost             pgtype.Numeric     `json:"actual_cost"`
+	LeadTimeDays           pgtype.Int4        `json:"lead_time_days"`
+	SupplierID             pgtype.Int4        `json:"supplier_id"`
+	AlternateComponentID   pgtype.Int4        `json:"alternate_component_id"`
+	IsActive               pgtype.Bool        `json:"is_active"`
+	Archived               pgtype.Bool        `json:"archived"`
+	ArchivedAt             pgtype.Timestamptz `json:"archived_at"`
+	ArchivedBy             pgtype.Int4        `json:"archived_by"`
+	FinishedMaterialName   pgtype.Text        `json:"finished_material_name"`
+	FinishedMaterialCode   pgtype.Text        `json:"finished_material_code"`
+	ComponentMaterialName  pgtype.Text        `json:"component_material_name"`
+	ComponentMaterialCode  pgtype.Text        `json:"component_material_code"`
+	ComponentUnitPrice     pgtype.Numeric     `json:"component_unit_price"`
+	UnitName               pgtype.Text        `json:"unit_name"`
+	UnitAbbreviation       pgtype.Text        `json:"unit_abbreviation"`
+	SupplierName           pgtype.Text        `json:"supplier_name"`
+	AlternateComponentName pgtype.Text        `json:"alternate_component_name"`
+	AlternateComponentCode pgtype.Text        `json:"alternate_component_code"`
+	AdjustedQuantity       int32              `json:"adjusted_quantity"`
+	CalculatedCost         pgtype.Numeric     `json:"calculated_cost"`
 }
 
 type Warehouse struct {

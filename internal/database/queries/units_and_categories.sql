@@ -31,6 +31,11 @@ WHERE id = $1;
 SELECT COUNT(*) AS count
 FROM material_categories;
 
+-- name: GetCategoryByName :one
+SELECT id, name, description, meta, created_at, updated_at
+FROM material_categories
+WHERE name = $1;
+
 
 -- name: CreateUnit :one
 INSERT INTO measure_units (name, abbreviation, convertion_factor, convert_to)
@@ -46,16 +51,16 @@ WHERE id = $1;
 UPDATE measure_units
 SET name = COALESCE($2, name),
     abbreviation = COALESCE($3, abbreviation),
-    convertion_factor = COALESCE($4, convertion_factor),
-    convert_to = COALESCE($5, convert_to),
+    convertion_factor = $4,
+    convert_to = $5,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
 RETURNING id, name, abbreviation, convertion_factor, convert_to, created_at, updated_at;
 
 -- name: ListUnits :many
-SELECT id, name, abbreviation, convertion_factor, convert_to, created_at, updated_at
-FROM measure_units
-ORDER BY created_at DESC
+SELECT u.id, u.name, u.abbreviation, u.convertion_factor, u.convert_to, un.name as convert_to_name, u.created_at, u.updated_at
+FROM measure_units u LEFT JOIN measure_units un ON u.convert_to = un.id
+ORDER BY u.created_at DESC
 LIMIT $1 OFFSET $2;
 
 -- name: DeleteUnit :exec
@@ -75,3 +80,13 @@ WHERE name = $1;
 SELECT id, name, abbreviation, convertion_factor, convert_to, created_at, updated_at
 FROM measure_units
 WHERE abbreviation = $1;
+
+-- name: CheckUnitReferences :one
+SELECT COUNT(*) AS count
+FROM measure_units
+WHERE convert_to = $1;
+
+-- name: CheckUnitUsedByMaterials :one
+SELECT COUNT(*) AS count
+FROM materials
+WHERE measure_unit_id = $1;

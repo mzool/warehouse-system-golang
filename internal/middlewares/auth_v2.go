@@ -674,14 +674,55 @@ func SessionAuth(config *SessionConfig) func(next http.Handler) http.Handler {
 				return
 			}
 
-			// Security: Verify IP address hasn't changed (optional, can be disabled for mobile users)
-			// Uncomment if you want strict IP checking
-			// currentIP := getClientIP(r)
-			// if sessionData.IPAddress != currentIP {
-			// 	config.Logger.Warn("Session IP mismatch", "user_id", sessionData.UserID, "original", sessionData.IPAddress, "current", currentIP)
-			// 	config.ErrorHandler(w, r, fmt.Errorf("session security violation"))
-			// 	return
-			// }
+			// User-Agent validation with risk scoring
+			currentUserAgent := r.UserAgent()
+			currentIP := getClientIP(r)
+
+			// Calculate risk score based on UA and IP changes
+			riskLevel := assessSessionRisk(sessionData, currentUserAgent, currentIP, config.Logger)
+
+			// Handle based on risk level
+			switch riskLevel {
+			case RiskHigh:
+				// High risk: Revoke session immediately
+				config.Logger.Warn("High-risk session detected - revoking session",
+					"user_id", sessionData.UserID,
+					"reason", "major_ua_and_ip_change",
+					"original_ua", normalizeUserAgent(sessionData.UserAgent),
+					"current_ua", normalizeUserAgent(currentUserAgent),
+					"original_ip", sessionData.IPAddress,
+					"current_ip", currentIP,
+				)
+
+				if err := deleteSession(ctx, config.Cache, config.SessionKeyPrefix, sessionToken); err != nil {
+					config.Logger.Error("Failed to delete high-risk session", "error", err, "user_id", sessionData.UserID)
+				}
+
+				config.ErrorHandler(w, r, fmt.Errorf("session security violation - please login again"))
+				return
+
+			case RiskMedium:
+				// Medium risk: Log warning but allow (soft validation)
+				config.Logger.Warn("Medium-risk session activity detected",
+					"user_id", sessionData.UserID,
+					"reason", "ua_or_ip_change",
+					"original_ua", normalizeUserAgent(sessionData.UserAgent),
+					"current_ua", normalizeUserAgent(currentUserAgent),
+					"original_ip", sessionData.IPAddress,
+					"current_ip", currentIP,
+				)
+				// Continue - allow access but logged for monitoring
+
+			case RiskLow:
+				// Low risk: Minor UA differences (version updates, etc.) - just log debug
+				if sessionData.UserAgent != currentUserAgent {
+					config.Logger.Debug("Minor User-Agent change detected",
+						"user_id", sessionData.UserID,
+						"original_ua", sessionData.UserAgent,
+						"current_ua", currentUserAgent,
+					)
+				}
+			}
 
 			// Update last access time (sliding expiration) - with timeout control
 			go func() {
@@ -1123,4 +1164,189 @@ func NewSmartErrorHandler(loginPath string) func(w http.ResponseWriter, r *http.
 			http.Redirect(w, r, redirectURL, http.StatusSeeOther)
 		}
 	}
+}
+
+// RiskLevel represents the risk level of a session
+type RiskLevel int
+
+const (
+	RiskLow    RiskLevel = 0 // Same browser, OS, minor version changes
+	RiskMedium RiskLevel = 1 // UA changed but same device type, or IP changed
+	RiskHigh   RiskLevel = 2 // Major UA change (browser switch) + IP country change
+)
+
+// UserAgentInfo contains normalized UA information
+type UserAgentInfo struct {
+	BrowserFamily string // Chrome, Firefox, Safari, Edge, etc.
+	BrowserMajor  string // Major version only (e.g., "120")
+	OSFamily      string // Windows, macOS, Linux, Android, iOS
+	DeviceType    string // desktop, mobile, tablet
+}
+
+// normalizeUserAgent extracts normalized UA information for comparison
+func normalizeUserAgent(ua string) UserAgentInfo {
+	ua = strings.ToLower(ua)
+	info := UserAgentInfo{
+		BrowserFamily: "unknown",
+		BrowserMajor:  "0",
+		OSFamily:      "unknown",
+		DeviceType:    "unknown",
+	}
+
+	// Detect Browser Family
+	switch {
+	case strings.Contains(ua, "edg/") || strings.Contains(ua, "edge/"):
+		info.BrowserFamily = "edge"
+		info.BrowserMajor = extractMajorVersion(ua, "edg/", "edge/")
+	case strings.Contains(ua, "chrome/") && !strings.Contains(ua, "edg"):
+		info.BrowserFamily = "chrome"
+		info.BrowserMajor = extractMajorVersion(ua, "chrome/")
+	case strings.Contains(ua, "firefox/"):
+		info.BrowserFamily = "firefox"
+		info.BrowserMajor = extractMajorVersion(ua, "firefox/")
+	case strings.Contains(ua, "safari/") && !strings.Contains(ua, "chrome"):
+		info.BrowserFamily = "safari"
+		info.BrowserMajor = extractMajorVersion(ua, "version/")
+	case strings.Contains(ua, "opera/") || strings.Contains(ua, "opr/"):
+		info.BrowserFamily = "opera"
+		info.BrowserMajor = extractMajorVersion(ua, "opera/", "opr/")
+	}
+
+	// Detect OS Family
+	switch {
+	case strings.Contains(ua, "windows nt"):
+		info.OSFamily = "windows"
+	case strings.Contains(ua, "mac os x") || strings.Contains(ua, "macos"):
+		info.OSFamily = "macos"
+	case strings.Contains(ua, "iphone") || strings.Contains(ua, "ipad"):
+		info.OSFamily = "ios"
+	case strings.Contains(ua, "android"):
+		info.OSFamily = "android"
+	case strings.Contains(ua, "linux"):
+		info.OSFamily = "linux"
+	}
+
+	// Detect Device Type
+	switch {
+	case strings.Contains(ua, "mobile"):
+		info.DeviceType = "mobile"
+	case strings.Contains(ua, "tablet") || strings.Contains(ua, "ipad"):
+		info.DeviceType = "tablet"
+	default:
+		info.DeviceType = "desktop"
+	}
+
+	return info
+}
+
+// extractMajorVersion extracts major version from UA string
+func extractMajorVersion(ua string, markers ...string) string {
+	for _, marker := range markers {
+		if idx := strings.Index(ua, marker); idx != -1 {
+			versionStart := idx + len(marker)
+			versionStr := ua[versionStart:]
+
+			// Find the end of version (first non-digit char after digits)
+			var major strings.Builder
+			for _, ch := range versionStr {
+				if ch >= '0' && ch <= '9' {
+					major.WriteRune(ch)
+				} else if major.Len() > 0 {
+					break
+				}
+			}
+
+			if major.Len() > 0 {
+				return major.String()
+			}
+		}
+	}
+	return "0"
+}
+
+// uaSignificantlyChanged checks if User-Agent changed significantly
+func uaSignificantlyChanged(original, current UserAgentInfo) bool {
+	// Same browser family and OS = not significant
+	if original.BrowserFamily == current.BrowserFamily &&
+		original.OSFamily == current.OSFamily {
+		return false
+	}
+
+	// Browser family changed (Chrome → Firefox, etc.)
+	if original.BrowserFamily != current.BrowserFamily &&
+		original.BrowserFamily != "unknown" &&
+		current.BrowserFamily != "unknown" {
+		return true
+	}
+
+	// OS changed (Windows → Android, etc.)
+	if original.OSFamily != current.OSFamily &&
+		original.OSFamily != "unknown" &&
+		current.OSFamily != "unknown" {
+		return true
+	}
+
+	// Device type changed (desktop → mobile)
+	if original.DeviceType != current.DeviceType {
+		return true
+	}
+
+	return false
+}
+
+// ipCountryChanged checks if IP is from a different country (simplified)
+// This is a basic implementation - for production, use a GeoIP library
+func ipCountryChanged(originalIP, currentIP string) bool {
+	// If IPs are identical, no change
+	if originalIP == currentIP {
+		return false
+	}
+
+	// Basic heuristic: Check if IP prefix (first 2 octets) changed
+	// This catches most country-level changes for IPv4
+	// To use MaxMind GeoIP2 or similar
+	originalPrefix := getIPPrefix(originalIP)
+	currentPrefix := getIPPrefix(currentIP)
+
+	// If prefixes are very different, likely different countries
+	// This is a simplification - real GeoIP is recommended
+	return originalPrefix != currentPrefix
+}
+
+// getIPPrefix extracts first two octets for basic geo comparison
+func getIPPrefix(ip string) string {
+	parts := strings.Split(ip, ".")
+	if len(parts) >= 2 {
+		return parts[0] + "." + parts[1]
+	}
+	// For IPv6 or malformed, return full IP
+	return ip
+}
+
+// assessSessionRisk evaluates session risk based on UA and IP changes
+func assessSessionRisk(sessionData *SessionData, currentUA, currentIP string, logger *slog.Logger) RiskLevel {
+	originalUAInfo := normalizeUserAgent(sessionData.UserAgent)
+	currentUAInfo := normalizeUserAgent(currentUA)
+
+	uaChanged := uaSignificantlyChanged(originalUAInfo, currentUAInfo)
+	ipChanged := ipCountryChanged(sessionData.IPAddress, currentIP)
+
+	// Risk Matrix:
+	// UA Changed + IP Changed (different country) = HIGH RISK
+	// UA Changed OR IP Changed = MEDIUM RISK
+	// Minor UA differences (versions, etc.) = LOW RISK
+
+	if uaChanged && ipChanged {
+		// Both changed significantly - likely session hijacking
+		return RiskHigh
+	}
+
+	if uaChanged || ipChanged {
+		// One changed - suspicious but could be legitimate
+		// (e.g., user upgraded browser, or traveling)
+		return RiskMedium
+	}
+
+	// No significant changes - safe
+	return RiskLow
 }

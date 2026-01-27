@@ -26,7 +26,6 @@ type UpdateProfileRequest struct {
 type ChangePasswordRequest struct {
 	CurrentPassword string `json:"current_password"`
 	NewPassword     string `json:"new_password"`
-	ConfirmPassword string `json:"confirm_password"`
 }
 
 // UpdateMyProfile handles updating the profile of the currently authenticated user.
@@ -190,13 +189,8 @@ func (u *UserHandler) ChangeMyPassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate input
-	if req.CurrentPassword == "" || req.NewPassword == "" || req.ConfirmPassword == "" {
+	if req.CurrentPassword == "" || req.NewPassword == "" {
 		config.RespondBadRequest(w, "All password fields are required", "")
-		return
-	}
-
-	if req.NewPassword != req.ConfirmPassword {
-		config.RespondBadRequest(w, "New password and confirmation do not match", "")
 		return
 	}
 
@@ -248,14 +242,32 @@ func (u *UserHandler) ChangeMyPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: Revoke all existing sessions for security
-	// This forces user to login again with new password
-	// if u.h.SessionStore != nil {
-	//     u.h.SessionStore.RevokeUserSessions(context.Background(), session.UserID)
-	// }
+	// Revoke ALL sessions for this user for security
+	// This forces re-login on all devices with the new password
+	// Prevents session hijacking if password was changed due to compromise
+	err = middlewares.RevokeUserSessions(r.Context(), &middlewares.SessionConfig{
+		Cache:            u.h.Cache,
+		SecretKey:        []byte(u.h.CFG.Auth.SessionSecret),
+		SessionKeyPrefix: "session:",
+		Logger:           u.h.Logger,
+	}, session.UserID)
+	if err != nil {
+		u.h.Logger.Error("Failed to revoke user sessions after password change", "error", err, "user_id", userID)
+	}
+
+	// Clear the current session cookie
+	middlewares.DeleteSessionCookie(w, &middlewares.SessionConfig{
+		CookieName:     "session",
+		CookiePath:     "/",
+		CookieSecure:   true,
+		CookieHTTPOnly: true,
+		CookieSameSite: http.SameSiteLaxMode,
+	})
+
+	u.h.Logger.Info("Password changed successfully - all sessions revoked", "user_id", userID)
 
 	config.RespondJSON(w, http.StatusOK, map[string]string{
-		"message": "Password changed successfully",
+		"message": "Password changed successfully. All sessions have been logged out. Please login again with your new password.",
 	})
 }
 
@@ -333,7 +345,7 @@ func (u *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
 	if req.Remember {
 		sessionDuration = 7 * 24 * time.Hour // 7 days
 	}
-	// Create session (simple config for handlers)
+	// Create session
 	session, err := middlewares.NewSession(r.Context(), &middlewares.SimpleSessionCreator{
 		Cache:            u.h.Cache,
 		SecretKey:        []byte(u.h.CFG.Auth.SessionSecret),
@@ -356,7 +368,7 @@ func (u *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
 		CookieSecure:    true,
 		CookieHTTPOnly:  true,
 		CookieSameSite:  http.SameSiteLaxMode,
-		SessionDuration: 24 * time.Hour,
+		SessionDuration: sessionDuration,
 	}, session)
 
 	// log
@@ -368,6 +380,7 @@ func (u *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
 			"id":        userAuth.ID,
 			"username":  userAuth.Username,
 			"email":     userAuth.Email,
+			"is_active": userAuth.IsActive.Bool,
 			"full_name": userAuth.FullName,
 			"role":      userAuth.Role,
 		},
@@ -380,4 +393,44 @@ func (u *UserHandler) GetUserPermissionsRoles(ctx context.Context, userId string
 
 	return roles, permissions, 1, nil
 
+}
+
+// Logout handles user logout.
+func (u *UserHandler) Logout(w http.ResponseWriter, r *http.Request) {
+	// Get user session from context
+	session, ok := middlewares.GetSessionFromContext(r)
+	if !ok {
+		config.RespondJSON(w, http.StatusUnauthorized, map[string]string{
+			"error": "User not authenticated",
+		})
+		return
+	}
+
+	// Revoke session
+	err := middlewares.RevokeSession(r.Context(), &middlewares.SessionConfig{
+		Cache:            u.h.Cache,
+		SecretKey:        []byte(u.h.CFG.Auth.SessionSecret),
+		SessionKeyPrefix: "session:",
+		Logger:           u.h.Logger,
+	}, session.SessionID)
+	if err != nil {
+		u.h.Logger.Error("Failed to revoke session", "error", err)
+		config.RespondJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "Failed to revoke user session",
+		})
+		return
+	}
+
+	// Clear session cookie
+	middlewares.DeleteSessionCookie(w, &middlewares.SessionConfig{
+		CookieName:     "session",
+		CookiePath:     "/",
+		CookieSecure:   true,
+		CookieHTTPOnly: true,
+		CookieSameSite: http.SameSiteLaxMode,
+	})
+
+	config.RespondJSON(w, http.StatusOK, map[string]string{
+		"message": "Logout successful",
+	})
 }

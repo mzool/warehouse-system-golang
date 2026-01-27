@@ -6,8 +6,16 @@ import (
 	"warehouse_system/internal/config"
 	"warehouse_system/internal/database/db"
 	"warehouse_system/internal/handlers"
+	"warehouse_system/internal/handlers/bom"
+	"warehouse_system/internal/handlers/categories"
+	"warehouse_system/internal/handlers/customers"
+	"warehouse_system/internal/handlers/materials"
+	"warehouse_system/internal/handlers/pos"
+	"warehouse_system/internal/handlers/sales"
+	"warehouse_system/internal/handlers/suppliers"
 	"warehouse_system/internal/handlers/units"
 	"warehouse_system/internal/handlers/users"
+	"warehouse_system/internal/handlers/warehouses"
 	"warehouse_system/internal/router"
 	"warehouse_system/web/views"
 
@@ -37,6 +45,22 @@ func ApiRoutes(r *router.RouterImpl, db *pgxpool.Pool, q *db.Queries, logger *sl
 	usersHandler := users.NewUserHandler(h)
 	// units handler
 	unitsHandler := units.NewUnitHandler(h)
+	// categories handler
+	categoriesHandler := categories.NewCategoryHandler(h)
+	// materials handler
+	materialsHandler := materials.NewMaterialHandler(h)
+	// warehouses handler
+	warehousesHandler := warehouses.NewWarehouseHandler(h)
+	// suppliers handler
+	suppliersHandler := suppliers.NewSupplierHandler(h)
+	// customers handler
+	customersHandler := customers.NewCustomerHandler(h)
+	// purchase orders handler
+	posHandler := pos.NewPOSHandler(h)
+	// sales orders handler
+	salesHandler := sales.NewSalesHandler(h)
+	// bill of materials handler
+	bomHandler := bom.NewBomHandler(h)
 
 	// Authentication routes
 	r.Register(&router.Route{
@@ -68,6 +92,13 @@ func ApiRoutes(r *router.RouterImpl, db *pgxpool.Pool, q *db.Queries, logger *sl
 		Category:    "users",
 		Input:       &router.RouteInput{RequiredAuth: true},
 	})
+	r.Register(&router.Route{
+		Method:      "POST",
+		Path:        "/logout",
+		HandlerFunc: usersHandler.Logout,
+		Category:    "users",
+		Input:       &router.RouteInput{RequiredAuth: true},
+	})
 
 	// ______________________________units_______________________________________________
 	// Create Unit
@@ -85,8 +116,8 @@ func ApiRoutes(r *router.RouterImpl, db *pgxpool.Pool, q *db.Queries, logger *sl
 				"convert_to":        "int32 (optional) - ID of the unit to convert to",
 			},
 		},
-		Response: map[string]interface{}{
-			"success": map[string]interface{}{
+		Response: map[string]any{
+			"success": map[string]any{
 				"status": 201,
 				"body": map[string]string{
 					"id":                "int32 - Unit ID",
@@ -98,14 +129,13 @@ func ApiRoutes(r *router.RouterImpl, db *pgxpool.Pool, q *db.Queries, logger *sl
 					"updated_at":        "timestamp - Last update timestamp",
 				},
 			},
-			"error": map[string]interface{}{
+			"error": map[string]any{
 				"400": map[string]string{"error": "Name is required | Abbreviation is required | Invalid convertion factor"},
 				"401": map[string]string{"error": "Unauthorized - Authentication required"},
 				"500": map[string]string{"error": "Internal server error"},
 			},
 		},
 	})
-
 	// List Units
 	r.Register(&router.Route{
 		Method:      "GET",
@@ -119,10 +149,10 @@ func ApiRoutes(r *router.RouterImpl, db *pgxpool.Pool, q *db.Queries, logger *sl
 				"limit": "int (optional, default: 10) - Items per page",
 			},
 		},
-		Response: map[string]interface{}{
-			"success": map[string]interface{}{
+		Response: map[string]any{
+			"success": map[string]any{
 				"status": 200,
-				"body": map[string]interface{}{
+				"body": map[string]any{
 					"units": "array - List of unit objects",
 					"pagination": map[string]string{
 						"page":        "int - Current page",
@@ -132,13 +162,75 @@ func ApiRoutes(r *router.RouterImpl, db *pgxpool.Pool, q *db.Queries, logger *sl
 					},
 				},
 			},
-			"error": map[string]interface{}{
+			"error": map[string]any{
 				"401": map[string]string{"error": "Unauthorized - Authentication required"},
 				"500": map[string]string{"error": "Internal server error"},
 			},
 		},
 	})
-
+	// Download Units Template
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/units/template",
+		HandlerFunc: unitsHandler.DownloadTemplate,
+		Category:    "units",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status":       200,
+				"content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+				"description":  "Excel file download with template and example data",
+			},
+		},
+	})
+	// Export Units to Excel
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/units/export",
+		HandlerFunc: unitsHandler.ExportUnits,
+		Category:    "units",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status":       200,
+				"content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+				"description":  "Excel file with all units data",
+			},
+		},
+	})
+	// Import Units from Excel
+	r.Register(&router.Route{
+		Method:      "POST",
+		Path:        "/units/import",
+		HandlerFunc: unitsHandler.ImportFromExcel,
+		Category:    "units",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			Body: map[string]string{
+				"file": "multipart/form-data - Excel file (.xlsx) with units data",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body": map[string]any{
+					"message":       "Import completed",
+					"success_count": "int - Number of units imported successfully",
+					"error_count":   "int - Number of rows with errors",
+					"errors":        "array - List of error messages for failed rows",
+				},
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "No file uploaded | Invalid Excel file | Excel file is empty"},
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
 	// Get Unit by ID
 	r.Register(&router.Route{
 		Method:      "GET",
@@ -151,8 +243,8 @@ func ApiRoutes(r *router.RouterImpl, db *pgxpool.Pool, q *db.Queries, logger *sl
 				"id": "int32 (required) - Unit ID",
 			},
 		},
-		Response: map[string]interface{}{
-			"success": map[string]interface{}{
+		Response: map[string]any{
+			"success": map[string]any{
 				"status": 200,
 				"body": map[string]string{
 					"id":                "int32 - Unit ID",
@@ -164,14 +256,13 @@ func ApiRoutes(r *router.RouterImpl, db *pgxpool.Pool, q *db.Queries, logger *sl
 					"updated_at":        "timestamp - Last update timestamp",
 				},
 			},
-			"error": map[string]interface{}{
+			"error": map[string]any{
 				"400": map[string]string{"error": "Missing unit ID | Invalid unit ID format"},
 				"401": map[string]string{"error": "Unauthorized - Authentication required"},
 				"404": map[string]string{"error": "Unit not found"},
 			},
 		},
 	})
-
 	// Get Unit by Name
 	r.Register(&router.Route{
 		Method:      "GET",
@@ -184,8 +275,8 @@ func ApiRoutes(r *router.RouterImpl, db *pgxpool.Pool, q *db.Queries, logger *sl
 				"name": "string (required) - Exact name of the unit to search",
 			},
 		},
-		Response: map[string]interface{}{
-			"success": map[string]interface{}{
+		Response: map[string]any{
+			"success": map[string]any{
 				"status": 200,
 				"body": map[string]string{
 					"id":                "int32 - Unit ID",
@@ -197,14 +288,13 @@ func ApiRoutes(r *router.RouterImpl, db *pgxpool.Pool, q *db.Queries, logger *sl
 					"updated_at":        "timestamp - Last update timestamp",
 				},
 			},
-			"error": map[string]interface{}{
+			"error": map[string]any{
 				"400": map[string]string{"error": "Missing unit name"},
 				"401": map[string]string{"error": "Unauthorized - Authentication required"},
 				"404": map[string]string{"error": "Unit not found"},
 			},
 		},
 	})
-
 	// Get Unit by Abbreviation
 	r.Register(&router.Route{
 		Method:      "GET",
@@ -217,8 +307,8 @@ func ApiRoutes(r *router.RouterImpl, db *pgxpool.Pool, q *db.Queries, logger *sl
 				"abbreviation": "string (required) - Exact abbreviation of the unit to search",
 			},
 		},
-		Response: map[string]interface{}{
-			"success": map[string]interface{}{
+		Response: map[string]any{
+			"success": map[string]any{
 				"status": 200,
 				"body": map[string]string{
 					"id":                "int32 - Unit ID",
@@ -230,14 +320,13 @@ func ApiRoutes(r *router.RouterImpl, db *pgxpool.Pool, q *db.Queries, logger *sl
 					"updated_at":        "timestamp - Last update timestamp",
 				},
 			},
-			"error": map[string]interface{}{
+			"error": map[string]any{
 				"400": map[string]string{"error": "Missing unit abbreviation"},
 				"401": map[string]string{"error": "Unauthorized - Authentication required"},
 				"404": map[string]string{"error": "Unit not found"},
 			},
 		},
 	})
-
 	// Update Unit
 	r.Register(&router.Route{
 		Method:      "PUT",
@@ -256,8 +345,8 @@ func ApiRoutes(r *router.RouterImpl, db *pgxpool.Pool, q *db.Queries, logger *sl
 				"convert_to":        "int32 (optional) - New target unit ID (if same as unit ID, factor is forced to 1.0)",
 			},
 		},
-		Response: map[string]interface{}{
-			"success": map[string]interface{}{
+		Response: map[string]any{
+			"success": map[string]any{
 				"status": 200,
 				"body": map[string]string{
 					"id":                "int32 - Unit ID",
@@ -269,7 +358,7 @@ func ApiRoutes(r *router.RouterImpl, db *pgxpool.Pool, q *db.Queries, logger *sl
 					"updated_at":        "timestamp - Last update timestamp",
 				},
 			},
-			"error": map[string]interface{}{
+			"error": map[string]any{
 				"400": map[string]string{"error": "Missing unit ID | Invalid unit ID format | Invalid request payload | Invalid convertion factor"},
 				"401": map[string]string{"error": "Unauthorized - Authentication required"},
 				"404": map[string]string{"error": "Unit not found"},
@@ -277,7 +366,6 @@ func ApiRoutes(r *router.RouterImpl, db *pgxpool.Pool, q *db.Queries, logger *sl
 			},
 		},
 	})
-
 	// Delete Unit
 	r.Register(&router.Route{
 		Method:      "DELETE",
@@ -290,17 +378,2150 @@ func ApiRoutes(r *router.RouterImpl, db *pgxpool.Pool, q *db.Queries, logger *sl
 				"id": "int32 (required) - Unit ID to delete",
 			},
 		},
-		Response: map[string]interface{}{
-			"success": map[string]interface{}{
+		Response: map[string]any{
+			"success": map[string]any{
 				"status": 200,
 				"body": map[string]string{
 					"message": "Unit deleted successfully",
 				},
 			},
-			"error": map[string]interface{}{
+			"error": map[string]any{
 				"400": map[string]string{"error": "Missing unit ID | Invalid unit ID format"},
 				"401": map[string]string{"error": "Unauthorized - Authentication required"},
 				"500": map[string]string{"error": "Internal server error - May be referenced by other records"},
+			},
+		},
+	})
+
+	// ======================= categories
+	// Create Category
+	r.Register(&router.Route{
+		Method:      "POST",
+		Path:        "/categories",
+		HandlerFunc: categoriesHandler.CreateCategory,
+		Category:    "categories",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			Body: map[string]string{
+				"name":        "string (required) - Name of the category",
+				"description": "string (optional) - Description of the category",
+				"meta":        "object (optional) - Additional metadata as JSON",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 201,
+				"body": map[string]string{
+					"id":          "int32 - Category ID",
+					"name":        "string - Category name",
+					"description": "string - Category description",
+					"meta":        "bytes - Metadata as JSON bytes",
+					"created_at":  "timestamp - Creation timestamp",
+					"updated_at":  "timestamp - Last update timestamp",
+				},
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Name is required | Invalid request payload"},
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+	// List Categories
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/categories",
+		HandlerFunc: categoriesHandler.ListCategories,
+		Category:    "categories",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			QueryParameters: map[string]string{
+				"page":  "int (optional, default: 1) - Page number",
+				"limit": "int (optional, default: 10) - Items per page",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body": map[string]any{
+					"categories": "array - List of category objects",
+					"pagination": map[string]string{
+						"page":        "int - Current page",
+						"limit":       "int - Items per page",
+						"total":       "int - Total items",
+						"total_pages": "int - Total pages",
+					},
+				},
+			},
+			"error": map[string]any{
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+	// Get Category by ID
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/categories/{id}",
+		HandlerFunc: categoriesHandler.GetCategoryByID,
+		Category:    "categories",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			PathParameters: map[string]string{
+				"id": "int32 (required) - Category ID",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body": map[string]string{
+					"id":          "int32 - Category ID",
+					"name":        "string - Category name",
+					"description": "string - Category description",
+					"meta":        "bytes - Metadata as JSON bytes",
+					"created_at":  "timestamp - Creation timestamp",
+					"updated_at":  "timestamp - Last update timestamp",
+				},
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Missing category ID | Invalid category ID format"},
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"404": map[string]string{"error": "Category not found"},
+			},
+		},
+	})
+	// Update Category
+	r.Register(&router.Route{
+		Method:      "PUT",
+		Path:        "/categories/{id}",
+		HandlerFunc: categoriesHandler.UpdateCategory,
+		Category:    "categories",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			PathParameters: map[string]string{
+				"id": "int32 (required) - Category ID to update",
+			},
+			Body: map[string]string{
+				"name":        "string (optional) - New name for the category",
+				"description": "string (optional) - New description",
+				"meta":        "object (optional) - New metadata as JSON",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body": map[string]string{
+					"id":          "int32 - Category ID",
+					"name":        "string - Updated category name",
+					"description": "string - Updated description",
+					"meta":        "bytes - Updated metadata",
+					"created_at":  "timestamp - Creation timestamp",
+					"updated_at":  "timestamp - Last update timestamp",
+				},
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Missing category ID | Invalid category ID format | Invalid request payload"},
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"404": map[string]string{"error": "Category not found"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+	// Delete Category
+	r.Register(&router.Route{
+		Method:      "DELETE",
+		Path:        "/categories/{id}",
+		HandlerFunc: categoriesHandler.DeleteCategory,
+		Category:    "categories",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			PathParameters: map[string]string{
+				"id": "int32 (required) - Category ID to delete",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body": map[string]string{
+					"message": "Category deleted successfully",
+				},
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Missing category ID | Invalid category ID format"},
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"409": map[string]string{"error": "Cannot delete - category is referenced by materials (after migration 004)"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+	// Download Categories Template
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/categories/template",
+		HandlerFunc: categoriesHandler.DownloadTemplate,
+		Category:    "categories",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status":       200,
+				"content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+				"description":  "Excel file download with template and example data",
+			},
+		},
+	})
+	// Export Categories to Excel
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/categories/export",
+		HandlerFunc: categoriesHandler.ExportCategories,
+		Category:    "categories",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status":       200,
+				"content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+				"description":  "Excel file with all categories data",
+			},
+		},
+	})
+	// Import Categories from Excel (Batch Create)
+	r.Register(&router.Route{
+		Method:      "POST",
+		Path:        "/categories/import",
+		HandlerFunc: categoriesHandler.ImportFromExcel,
+		Category:    "categories",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			Body: map[string]string{
+				"type":        "multipart/form-data",
+				"description": "Excel file with categories (Name, Description columns)",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status":        201,
+				"success_count": "number of successfully imported categories",
+				"error_count":   "number of failed rows",
+				"total_rows":    "total data rows processed",
+				"errors":        "array of error details (if any)",
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Invalid file format or data"},
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+			},
+		},
+	})
+
+	// ======================= materials
+	// Download Excel Template
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/materials/template",
+		HandlerFunc: materialsHandler.DownloadTemplate,
+		Category:    "materials",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status":       200,
+				"content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+				"description":  "Excel file download with template and example data",
+			},
+		},
+	})
+	// Import from Excel
+	r.Register(&router.Route{
+		Method:      "POST",
+		Path:        "/materials/import",
+		HandlerFunc: materialsHandler.ImportFromExcel,
+		Category:    "materials",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			Body: map[string]string{
+				"file": "multipart/form-data - Excel file (.xlsx) with materials data",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body": map[string]any{
+					"message":       "Import completed",
+					"success_count": "int - Number of materials imported successfully",
+					"error_count":   "int - Number of rows with errors",
+					"errors":        "array - List of error messages for failed rows",
+				},
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "No file uploaded | Invalid Excel file | Excel file is empty"},
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"500": map[string]string{"error": "Failed to begin transaction | Failed to commit transaction"},
+			},
+		},
+	})
+	// Create Material
+	r.Register(&router.Route{
+		Method:      "POST",
+		Path:        "/materials",
+		HandlerFunc: materialsHandler.CreateMaterial,
+		Category:    "materials",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			Body: map[string]string{
+				"name":            "string (required) - Material name",
+				"description":     "string (optional) - Material description",
+				"type":            "string (required) - Type: raw, intermediate, finished, consumable, service",
+				"code":            "string (required) - Unique material code",
+				"sku":             "string (required) - Unique SKU",
+				"barcode":         "string (optional) - Barcode",
+				"saleable":        "boolean (optional, default: true) - Is material saleable",
+				"unit_price":      "float64 (optional) - Unit price",
+				"sale_price":      "float64 (optional) - Sale price",
+				"category":        "int32 (optional) - Category ID",
+				"measure_unit_id": "int32 (optional) - Measurement unit ID",
+				"weight":          "float64 (optional) - Weight",
+				"is_active":       "boolean (optional, default: true) - Is material active",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 201,
+				"body":   "Material object with all fields",
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Name is required | Code is required | SKU is required | Type is required"},
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"409": map[string]string{"error": "Material code already exists | Material SKU already exists"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+	// Search Materials
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/materials",
+		HandlerFunc: materialsHandler.SearchMaterials,
+		Category:    "materials",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			QueryParameters: map[string]string{
+				"query":     "string (optional) - Search in name, description, code, SKU",
+				"type":      "string (optional) - Filter by material type",
+				"category":  "int (optional) - Filter by category ID",
+				"is_active": "boolean (optional) - Filter by active status",
+				"saleable":  "boolean (optional) - Filter by saleable status",
+				"page":      "int (optional, default: 1) - Page number",
+				"limit":     "int (optional, default: 10) - Items per page",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body": map[string]any{
+					"materials":  "array - List of material objects with category and unit info",
+					"pagination": "object - Pagination metadata",
+				},
+			},
+			"error": map[string]any{
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+	// Get Material by ID
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/materials/{id}",
+		HandlerFunc: materialsHandler.GetMaterialByID,
+		Category:    "materials",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			PathParameters: map[string]string{
+				"id": "int32 (required) - Material ID",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body":   "Full material object with category and unit details",
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Missing material ID | Invalid material ID format"},
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"404": map[string]string{"error": "Material not found"},
+			},
+		},
+	})
+	// Update Material
+	r.Register(&router.Route{
+		Method:      "PUT",
+		Path:        "/materials/{id}",
+		HandlerFunc: materialsHandler.UpdateMaterial,
+		Category:    "materials",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			PathParameters: map[string]string{
+				"id": "int32 (required) - Material ID to update",
+			},
+			Body: map[string]string{
+				"description": "All fields are optional - send only fields to update",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body":   "Updated material object",
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Invalid material ID | Invalid request payload"},
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"404": map[string]string{"error": "Material not found"},
+				"409": map[string]string{"error": "Material code already exists | Material SKU already exists"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+	// Archive Material (Soft Delete)
+	r.Register(&router.Route{
+		Method:      "DELETE",
+		Path:        "/materials/{id}",
+		HandlerFunc: materialsHandler.ArchiveMaterial,
+		Category:    "materials",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			PathParameters: map[string]string{
+				"id": "int32 (required) - Material ID to archive",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body": map[string]string{
+					"message": "Material archived successfully",
+				},
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Missing material ID | Invalid material ID format"},
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// Restore Material (Unarchive)
+	r.Register(&router.Route{
+		Method:      "PUT",
+		Path:        "/materials/{id}/restore",
+		HandlerFunc: materialsHandler.RestoreMaterial,
+		Category:    "materials",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			PathParameters: map[string]string{
+				"id": "int32 (required) - Material ID to restore",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body": map[string]string{
+					"message": "Material restored successfully",
+				},
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Missing material ID | Invalid material ID format"},
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// Export Materials to Excel
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/materials/export",
+		HandlerFunc: materialsHandler.ExportMaterials,
+		Category:    "materials",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status":       200,
+				"content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+				"description":  "Excel file with all materials data",
+			},
+		},
+	})
+
+	// ============================================================================
+	// WAREHOUSE ROUTES
+	// ============================================================================
+
+	// Create Warehouse
+	r.Register(&router.Route{
+		Method:      "POST",
+		Path:        "/warehouses",
+		HandlerFunc: warehousesHandler.CreateWarehouse,
+		Category:    "warehouses",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			Body: map[string]string{
+				"name":             "string (required) - Warehouse name",
+				"code":             "string (required) - Unique warehouse code",
+				"location":         "string (optional) - Warehouse location address",
+				"description":      "string (optional) - Warehouse description",
+				"valuation":        "string (optional) - Valuation method: FIFO, LIFO, Weighted Average",
+				"parent_warehouse": "int32 (optional) - Parent warehouse ID for hierarchical structure",
+				"capacity":         "float64 (optional) - Warehouse capacity",
+				"meta":             "json (optional) - Additional metadata",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 201,
+				"body": map[string]any{
+					"id":               "int32",
+					"name":             "string",
+					"code":             "string",
+					"location":         "string",
+					"description":      "string",
+					"valuation":        "string",
+					"parent_warehouse": "int32",
+					"capacity":         "decimal",
+					"meta":             "json",
+					"created_at":       "timestamp",
+					"updated_at":       "timestamp",
+				},
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Invalid request payload | Missing required fields"},
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"409": map[string]string{"error": "Warehouse code already exists | Warehouse name already exists"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// Get Warehouse by ID
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/warehouses/{id}",
+		HandlerFunc: warehousesHandler.GetWarehouse,
+		Category:    "warehouses",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			PathParameters: map[string]string{
+				"id": "int32 (required) - Warehouse ID",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body": map[string]any{
+					"id":               "int32",
+					"name":             "string",
+					"code":             "string",
+					"location":         "string",
+					"description":      "string",
+					"valuation":        "string",
+					"parent_warehouse": "int32",
+					"capacity":         "decimal",
+					"meta":             "json",
+					"created_at":       "timestamp",
+					"updated_at":       "timestamp",
+				},
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Missing warehouse ID | Invalid warehouse ID format"},
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"404": map[string]string{"error": "Warehouse not found"},
+			},
+		},
+	})
+
+	// Update Warehouse
+	r.Register(&router.Route{
+		Method:      "PUT",
+		Path:        "/warehouses/{id}",
+		HandlerFunc: warehousesHandler.UpdateWarehouse,
+		Category:    "warehouses",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			PathParameters: map[string]string{
+				"id": "int32 (required) - Warehouse ID",
+			},
+			Body: map[string]string{
+				"name":             "string (optional) - Warehouse name",
+				"code":             "string (optional) - Unique warehouse code",
+				"location":         "string (optional) - Warehouse location address",
+				"description":      "string (optional) - Warehouse description",
+				"valuation":        "string (optional) - Valuation method: FIFO, LIFO, Weighted Average",
+				"parent_warehouse": "int32 (optional) - Parent warehouse ID",
+				"capacity":         "float64 (optional) - Warehouse capacity",
+				"meta":             "json (optional) - Additional metadata",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body": map[string]any{
+					"id":               "int32",
+					"name":             "string",
+					"code":             "string",
+					"location":         "string",
+					"description":      "string",
+					"valuation":        "string",
+					"parent_warehouse": "int32",
+					"capacity":         "decimal",
+					"meta":             "json",
+					"created_at":       "timestamp",
+					"updated_at":       "timestamp",
+				},
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Invalid request payload | Missing warehouse ID"},
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"404": map[string]string{"error": "Warehouse not found"},
+				"409": map[string]string{"error": "Warehouse code already exists | Warehouse name already exists"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// Delete Warehouse
+	r.Register(&router.Route{
+		Method:      "DELETE",
+		Path:        "/warehouses/{id}",
+		HandlerFunc: warehousesHandler.DeleteWarehouse,
+		Category:    "warehouses",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			PathParameters: map[string]string{
+				"id": "int32 (required) - Warehouse ID",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body": map[string]string{
+					"message": "Warehouse deleted successfully",
+				},
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Missing warehouse ID | Invalid warehouse ID format"},
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// List Warehouses
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/warehouses",
+		HandlerFunc: warehousesHandler.ListWarehouses,
+		Category:    "warehouses",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			QueryParameters: map[string]string{
+				"page":  "int (optional) - Page number for pagination (default: 1)",
+				"limit": "int (optional) - Items per page (default: 10)",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body": map[string]any{
+					"warehouses": "array of warehouse objects",
+					"pagination": map[string]any{
+						"page":        "int",
+						"limit":       "int",
+						"total":       "int",
+						"total_pages": "int",
+					},
+				},
+			},
+			"error": map[string]any{
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// ============================================================================
+	// SUPPLIER ROUTES
+	// ============================================================================
+
+	// Create Supplier
+	r.Register(&router.Route{
+		Method:      "POST",
+		Path:        "/suppliers",
+		HandlerFunc: suppliersHandler.CreateSupplier,
+		Category:    "suppliers",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 201,
+				"body": map[string]any{
+					"id":            "int32",
+					"name":          "string",
+					"contact_name":  "string",
+					"contact_email": "string",
+					"contact_phone": "string",
+					"address":       "string",
+					"meta":          "json",
+					"created_at":    "timestamp",
+					"updated_at":    "timestamp",
+				},
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Invalid request payload | Missing required fields | Invalid email format | Invalid phone format"},
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"409": map[string]string{"error": "Supplier name already exists | Supplier email already exists | Supplier phone already exists"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// Get Supplier by ID
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/suppliers/{id}",
+		HandlerFunc: suppliersHandler.GetSupplier,
+		Category:    "suppliers",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			PathParameters: map[string]string{
+				"id": "int32 (required) - Supplier ID",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body": map[string]any{
+					"id":            "int32",
+					"name":          "string",
+					"contact_name":  "string",
+					"contact_email": "string",
+					"contact_phone": "string",
+					"address":       "string",
+					"meta":          "json",
+					"created_at":    "timestamp",
+					"updated_at":    "timestamp",
+				},
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Missing supplier ID | Invalid supplier ID format"},
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"404": map[string]string{"error": "Supplier not found"},
+			},
+		},
+	})
+
+	// Update Supplier
+	r.Register(&router.Route{
+		Method:      "PUT",
+		Path:        "/suppliers/{id}",
+		HandlerFunc: suppliersHandler.UpdateSupplier,
+		Category:    "suppliers",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			PathParameters: map[string]string{
+				"id": "int32 (required) - Supplier ID",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body": map[string]any{
+					"id":            "int32",
+					"name":          "string",
+					"contact_name":  "string",
+					"contact_email": "string",
+					"contact_phone": "string",
+					"address":       "string",
+					"meta":          "json",
+					"created_at":    "timestamp",
+					"updated_at":    "timestamp",
+				},
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Invalid request payload | Missing supplier ID | Invalid email format | Invalid phone format"},
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"404": map[string]string{"error": "Supplier not found"},
+				"409": map[string]string{"error": "Supplier name already exists | Supplier email already exists | Supplier phone already exists"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// Delete Supplier
+	r.Register(&router.Route{
+		Method:      "DELETE",
+		Path:        "/suppliers/{id}",
+		HandlerFunc: suppliersHandler.DeleteSupplier,
+		Category:    "suppliers",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			PathParameters: map[string]string{
+				"id": "int32 (required) - Supplier ID",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body": map[string]string{
+					"message": "Supplier deleted successfully",
+				},
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Missing supplier ID | Invalid supplier ID format"},
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// List Suppliers
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/suppliers",
+		HandlerFunc: suppliersHandler.ListSuppliers,
+		Category:    "suppliers",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			QueryParameters: map[string]string{
+				"page":  "int (optional) - Page number for pagination (default: 1)",
+				"limit": "int (optional) - Items per page (default: 10)",
+				"query": "string (optional) - Search query (name, contact, email, phone, address)",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body": map[string]any{
+					"suppliers": "array of supplier objects",
+					"pagination": map[string]any{
+						"page":        "int",
+						"limit":       "int",
+						"total":       "int",
+						"total_pages": "int",
+					},
+				},
+			},
+			"error": map[string]any{
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// ______________________________customers_______________________________________________
+	// Create Customer
+	r.Register(&router.Route{
+		Method:      "POST",
+		Path:        "/customers",
+		HandlerFunc: customersHandler.CreateCustomer,
+		Category:    "customers",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			Body: map[string]string{
+				"name":          "string (required) - Customer name",
+				"contact_name":  "string (optional) - Contact person name",
+				"contact_email": "string (optional) - Contact email address",
+				"contact_phone": "string (optional) - Contact phone number",
+				"address":       "string (optional) - Customer address",
+				"meta":          "object (optional) - Additional metadata as JSON",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 201,
+				"body": map[string]string{
+					"id":            "int32 - Customer ID",
+					"name":          "string - Customer name",
+					"contact_name":  "string - Contact person name",
+					"contact_email": "string - Contact email",
+					"contact_phone": "string - Contact phone",
+					"address":       "string - Customer address",
+					"meta":          "json - Metadata",
+					"created_at":    "timestamp - Creation timestamp",
+					"updated_at":    "timestamp - Last update timestamp",
+				},
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Invalid request payload | Name is required"},
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"409": map[string]string{"error": "Customer name already exists | Customer email already exists | Customer phone already exists"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// Get Customer by ID
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/customers/{id}",
+		HandlerFunc: customersHandler.GetCustomer,
+		Category:    "customers",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			PathParameters: map[string]string{
+				"id": "int32 (required) - Customer ID",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body": map[string]string{
+					"id":            "int32 - Customer ID",
+					"name":          "string - Customer name",
+					"contact_name":  "string - Contact person name",
+					"contact_email": "string - Contact email",
+					"contact_phone": "string - Contact phone",
+					"address":       "string - Customer address",
+					"meta":          "json - Metadata",
+					"created_at":    "timestamp - Creation timestamp",
+					"updated_at":    "timestamp - Last update timestamp",
+				},
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Missing customer ID | Invalid customer ID format"},
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"404": map[string]string{"error": "Customer not found"},
+			},
+		},
+	})
+
+	// Update Customer
+	r.Register(&router.Route{
+		Method:      "PUT",
+		Path:        "/customers/{id}",
+		HandlerFunc: customersHandler.UpdateCustomer,
+		Category:    "customers",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			PathParameters: map[string]string{
+				"id": "int32 (required) - Customer ID",
+			},
+			Body: map[string]string{
+				"name":          "string (optional) - New customer name",
+				"contact_name":  "string (optional) - New contact person name",
+				"contact_email": "string (optional) - New contact email",
+				"contact_phone": "string (optional) - New contact phone",
+				"address":       "string (optional) - New address",
+				"meta":          "object (optional) - New metadata as JSON",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body": map[string]string{
+					"id":            "int32 - Customer ID",
+					"name":          "string - Customer name",
+					"contact_name":  "string - Contact person name",
+					"contact_email": "string - Contact email",
+					"contact_phone": "string - Contact phone",
+					"address":       "string - Customer address",
+					"meta":          "json - Metadata",
+					"created_at":    "timestamp - Creation timestamp",
+					"updated_at":    "timestamp - Last update timestamp",
+				},
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Invalid request payload | Missing customer ID | Invalid customer ID format"},
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"404": map[string]string{"error": "Customer not found"},
+				"409": map[string]string{"error": "Customer name already exists | Customer email already exists | Customer phone already exists"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// Delete Customer
+	r.Register(&router.Route{
+		Method:      "DELETE",
+		Path:        "/customers/{id}",
+		HandlerFunc: customersHandler.DeleteCustomer,
+		Category:    "customers",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			PathParameters: map[string]string{
+				"id": "int32 (required) - Customer ID",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body": map[string]string{
+					"message": "Customer deleted successfully",
+				},
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Missing customer ID | Invalid customer ID format"},
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"404": map[string]string{"error": "Customer not found"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// List Customers
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/customers",
+		HandlerFunc: customersHandler.ListCustomers,
+		Category:    "customers",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			QueryParameters: map[string]string{
+				"page":  "int (optional) - Page number for pagination (default: 1)",
+				"limit": "int (optional) - Items per page (default: 10)",
+				"query": "string (optional) - Search query (name, contact name, email, phone, address)",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body": map[string]any{
+					"customers": "array of customer objects",
+					"pagination": map[string]any{
+						"page":        "int",
+						"limit":       "int",
+						"total":       "int",
+						"total_pages": "int",
+					},
+				},
+			},
+			"error": map[string]any{
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// ______________________________purchase_orders_______________________________________________
+	// Create Purchase Order
+	r.Register(&router.Route{
+		Method:      "POST",
+		Path:        "/purchase-orders",
+		HandlerFunc: posHandler.CreatePurchaseOrder,
+		Category:    "purchase_orders",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			Body: map[string]string{
+				"order_number":           "string (required) - Unique order number",
+				"supplier_id":            "int32 (optional) - Supplier ID",
+				"order_date":             "timestamp (optional) - Order date (defaults to now)",
+				"expected_delivery_date": "timestamp (optional) - Expected delivery date",
+				"status":                 "string (optional) - Order status (Pending, Approved, Received, Cancelled, Partial)",
+				"items":                  "array (required) - Array of order items with material_id, quantity, unit_price, received_quantity",
+				"meta":                   "object (optional) - Additional metadata as JSON",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 201,
+				"body": map[string]any{
+					"purchase_order": "Purchase order object",
+					"items":          "Array of purchase order items",
+				},
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Invalid request payload | Missing required fields | Invalid status"},
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"409": map[string]string{"error": "Purchase order number already exists"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// Get Purchase Order by ID
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/purchase-orders/{id}",
+		HandlerFunc: posHandler.GetPurchaseOrder,
+		Category:    "purchase_orders",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			PathParameters: map[string]string{
+				"id": "int32 (required) - Purchase order ID",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body": map[string]any{
+					"purchase_order": "Purchase order object",
+					"items":          "Array of purchase order items",
+				},
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Missing purchase order ID | Invalid purchase order ID format"},
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"404": map[string]string{"error": "Purchase order not found"},
+			},
+		},
+	})
+
+	// Update Purchase Order
+	r.Register(&router.Route{
+		Method:      "PUT",
+		Path:        "/purchase-orders/{id}",
+		HandlerFunc: posHandler.UpdatePurchaseOrder,
+		Category:    "purchase_orders",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			PathParameters: map[string]string{
+				"id": "int32 (required) - Purchase order ID",
+			},
+			Body: map[string]string{
+				"order_number":           "string (optional) - New order number",
+				"supplier_id":            "int32 (optional) - New supplier ID",
+				"order_date":             "timestamp (optional) - New order date",
+				"expected_delivery_date": "timestamp (optional) - New expected delivery date",
+				"status":                 "string (optional) - New status",
+				"approved_by":            "int32 (optional) - User ID who approved",
+				"meta":                   "object (optional) - New metadata as JSON",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body":   "Purchase order object",
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Invalid request payload | Missing purchase order ID | Invalid status"},
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"404": map[string]string{"error": "Purchase order not found"},
+				"409": map[string]string{"error": "Purchase order number already exists"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// Delete Purchase Order
+	r.Register(&router.Route{
+		Method:      "DELETE",
+		Path:        "/purchase-orders/{id}",
+		HandlerFunc: posHandler.DeletePurchaseOrder,
+		Category:    "purchase_orders",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			PathParameters: map[string]string{
+				"id": "int32 (required) - Purchase order ID",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body": map[string]string{
+					"message": "Purchase order deleted successfully",
+				},
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Missing purchase order ID | Invalid purchase order ID format"},
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"404": map[string]string{"error": "Purchase order not found"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// List Purchase Orders
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/purchase-orders",
+		HandlerFunc: posHandler.ListPurchaseOrders,
+		Category:    "purchase_orders",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			QueryParameters: map[string]string{
+				"page":  "int (optional) - Page number for pagination (default: 1)",
+				"limit": "int (optional) - Items per page (default: 10)",
+				"query": "string (optional) - Search query (order number, status)",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body": map[string]any{
+					"purchase_orders": "array of purchase order objects",
+					"pagination": map[string]any{
+						"page":        "int",
+						"limit":       "int",
+						"total":       "int",
+						"total_pages": "int",
+					},
+				},
+			},
+			"error": map[string]any{
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// Get Purchase Order Items
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/purchase-orders/{id}/items",
+		HandlerFunc: posHandler.GetPurchaseOrderItems,
+		Category:    "purchase_orders",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			PathParameters: map[string]string{
+				"id": "int32 (required) - Purchase order ID",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body": map[string]any{
+					"items": "array of purchase order items",
+				},
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Missing purchase order ID | Invalid purchase order ID format"},
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"404": map[string]string{"error": "Purchase order not found"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// Add Item to Purchase Order
+	r.Register(&router.Route{
+		Method:      "POST",
+		Path:        "/purchase-orders/{id}/items",
+		HandlerFunc: posHandler.AddPurchaseOrderItem,
+		Category:    "purchase_orders",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			PathParameters: map[string]string{
+				"id": "int32 (required) - Purchase order ID",
+			},
+			Body: map[string]string{
+				"material_id":       "int32 (required) - Material ID",
+				"quantity":          "float (required) - Item quantity",
+				"unit_price":        "float (required) - Unit price",
+				"received_quantity": "float (optional) - Received quantity (default: 0)",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 201,
+				"body":   "Purchase order item object",
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Invalid request payload | Invalid data"},
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"404": map[string]string{"error": "Purchase order not found"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// Update Purchase Order Item
+	r.Register(&router.Route{
+		Method:      "PUT",
+		Path:        "/purchase-orders/{id}/items/{item_id}",
+		HandlerFunc: posHandler.UpdatePurchaseOrderItem,
+		Category:    "purchase_orders",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			PathParameters: map[string]string{
+				"id":      "int32 (required) - Purchase order ID",
+				"item_id": "int32 (required) - Item ID",
+			},
+			Body: map[string]string{
+				"material_id":       "int32 (optional) - New material ID",
+				"quantity":          "float (optional) - New quantity",
+				"unit_price":        "float (optional) - New unit price",
+				"received_quantity": "float (optional) - New received quantity",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body":   "Updated purchase order item object",
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Invalid request payload | Item does not belong to this purchase order"},
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"404": map[string]string{"error": "Item not found"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// Delete Purchase Order Item
+	r.Register(&router.Route{
+		Method:      "DELETE",
+		Path:        "/purchase-orders/{id}/items/{item_id}",
+		HandlerFunc: posHandler.DeletePurchaseOrderItem,
+		Category:    "purchase_orders",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			PathParameters: map[string]string{
+				"id":      "int32 (required) - Purchase order ID",
+				"item_id": "int32 (required) - Item ID",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body": map[string]string{
+					"message": "Item deleted successfully",
+				},
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Missing IDs | Item does not belong to this purchase order"},
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"404": map[string]string{"error": "Item not found"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// ______________________________Sales Orders_______________________________________________
+	// Create Sales Order
+	r.Register(&router.Route{
+		Method:      "POST",
+		Path:        "/sales-orders",
+		HandlerFunc: salesHandler.CreateSalesOrder,
+		Category:    "sales_orders",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			Body: map[string]string{
+				"order_number":           "string (required) - Unique order number",
+				"customer_id":            "int32 (required) - Customer ID",
+				"order_date":             "string (optional) - Order date (ISO format: 2026-01-27 or 2026-01-27T10:30:00)",
+				"expected_delivery_date": "string (optional) - Expected delivery date",
+				"status":                 "string (optional) - Status: Pending, Approved, Shipped, Cancelled, Partial (default: Pending)",
+				"items":                  "array (required) - Array of items with material_id, quantity, unit_price, shipped_quantity",
+				"meta":                   "object (optional) - Additional metadata",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 201,
+				"body": map[string]any{
+					"sales_order": "Sales order object",
+					"items":       "Array of created items",
+				},
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Invalid request payload | Missing required fields | Invalid status | Invalid item data | Invalid dates"},
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"409": map[string]string{"error": "Sales order number already exists"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// Get Sales Order by ID
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/sales-orders/{id}",
+		HandlerFunc: salesHandler.GetSalesOrder,
+		Category:    "sales_orders",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			PathParameters: map[string]string{
+				"id": "int32 (required) - Sales order ID",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body": map[string]any{
+					"sales_order": "Sales order object",
+					"items":       "Array of order items",
+				},
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Missing sales order ID | Invalid sales order ID format"},
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"404": map[string]string{"error": "Sales order not found"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// Update Sales Order
+	r.Register(&router.Route{
+		Method:      "PUT",
+		Path:        "/sales-orders/{id}",
+		HandlerFunc: salesHandler.UpdateSalesOrder,
+		Category:    "sales_orders",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			PathParameters: map[string]string{
+				"id": "int32 (required) - Sales order ID",
+			},
+			Body: map[string]string{
+				"order_number":           "string (optional) - New order number",
+				"customer_id":            "int32 (optional) - New customer ID",
+				"order_date":             "string (optional) - New order date",
+				"expected_delivery_date": "string (optional) - New expected delivery date",
+				"status":                 "string (optional) - New status",
+				"approved_by":            "int32 (optional) - Approver user ID",
+				"meta":                   "object (optional) - Additional metadata",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body":   "Updated sales order object",
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Invalid request payload | Invalid status | Invalid dates"},
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"404": map[string]string{"error": "Sales order not found"},
+				"409": map[string]string{"error": "Sales order number already exists"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// Delete Sales Order
+	r.Register(&router.Route{
+		Method:      "DELETE",
+		Path:        "/sales-orders/{id}",
+		HandlerFunc: salesHandler.DeleteSalesOrder,
+		Category:    "sales_orders",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			PathParameters: map[string]string{
+				"id": "int32 (required) - Sales order ID",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body": map[string]string{
+					"message": "Sales order deleted successfully",
+				},
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Missing sales order ID | Invalid sales order ID format"},
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"404": map[string]string{"error": "Sales order not found"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// List Sales Orders
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/sales-orders",
+		HandlerFunc: salesHandler.ListSalesOrders,
+		Category:    "sales_orders",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			QueryParameters: map[string]string{
+				"page":  "int (optional) - Page number for pagination (default: 1)",
+				"limit": "int (optional) - Items per page (default: 10)",
+				"q":     "string (optional) - Search query (order number, status)",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body": map[string]any{
+					"sales_orders": "array of sales order objects",
+					"pagination": map[string]any{
+						"page":        "int",
+						"limit":       "int",
+						"total":       "int",
+						"total_pages": "int",
+					},
+				},
+			},
+			"error": map[string]any{
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// Get Sales Order Items
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/sales-orders/{id}/items",
+		HandlerFunc: salesHandler.GetSalesOrderItems,
+		Category:    "sales_orders",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			PathParameters: map[string]string{
+				"id": "int32 (required) - Sales order ID",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body": map[string]any{
+					"items": "array of sales order items",
+				},
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Missing sales order ID | Invalid sales order ID format"},
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"404": map[string]string{"error": "Sales order not found"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// Add Item to Sales Order
+	r.Register(&router.Route{
+		Method:      "POST",
+		Path:        "/sales-orders/{id}/items",
+		HandlerFunc: salesHandler.AddSalesOrderItem,
+		Category:    "sales_orders",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			PathParameters: map[string]string{
+				"id": "int32 (required) - Sales order ID",
+			},
+			Body: map[string]string{
+				"material_id":      "int32 (required) - Material ID",
+				"quantity":         "float (required) - Item quantity (must be > 0)",
+				"unit_price":       "float (required) - Unit price (must be > 0)",
+				"shipped_quantity": "float (optional) - Shipped quantity (default: 0, cannot be negative)",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 201,
+				"body":   "Sales order item object",
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Invalid request payload | Invalid data"},
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"403": map[string]string{"error": "Cannot add items to a cancelled sales order | Can only add items when sales order status is Pending"},
+				"404": map[string]string{"error": "Sales order not found"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// Update Sales Order Item
+	r.Register(&router.Route{
+		Method:      "PUT",
+		Path:        "/sales-orders/{id}/items/{item_id}",
+		HandlerFunc: salesHandler.UpdateSalesOrderItem,
+		Category:    "sales_orders",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			PathParameters: map[string]string{
+				"id":      "int32 (required) - Sales order ID",
+				"item_id": "int32 (required) - Item ID",
+			},
+			Body: map[string]string{
+				"material_id":      "int32 (optional) - New material ID",
+				"quantity":         "float (optional) - New quantity (must be > 0)",
+				"unit_price":       "float (optional) - New unit price (must be > 0)",
+				"shipped_quantity": "float (optional) - New shipped quantity (cannot be negative)",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body":   "Updated sales order item object",
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Invalid request payload | Item does not belong to this sales order | Invalid quantity | Invalid price"},
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"403": map[string]string{"error": "Cannot modify items of a cancelled sales order | Can only update items when sales order status is Pending"},
+				"404": map[string]string{"error": "Item not found | Sales order not found"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// Delete Sales Order Item
+	r.Register(&router.Route{
+		Method:      "DELETE",
+		Path:        "/sales-orders/{id}/items/{item_id}",
+		HandlerFunc: salesHandler.DeleteSalesOrderItem,
+		Category:    "sales_orders",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			PathParameters: map[string]string{
+				"id":      "int32 (required) - Sales order ID",
+				"item_id": "int32 (required) - Item ID",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body": map[string]string{
+					"message": "Item deleted successfully",
+				},
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Missing IDs | Item does not belong to this sales order"},
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"403": map[string]string{"error": "Cannot delete items from a cancelled sales order | Can only delete items when sales order status is Pending | Cannot delete the last item"},
+				"404": map[string]string{"error": "Item not found | Sales order not found"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// ============================
+	// Bill of Materials (BOM) Routes
+	// ============================
+
+	// Bulk Create BOM
+	// POST /bom/bulk
+	// Create multiple BOM entries at once for a finished material
+	r.Register(&router.Route{
+		Method:      "POST",
+		Path:        "/bom/bulk",
+		HandlerFunc: bomHandler.BulkCreateBillOfMaterials,
+		Category:    "bom",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			Body: map[string]string{
+				"finished_material_id": "int32 (required) - Finished material ID",
+				"components":           "array (required) - Array of component objects [{component_material_id, quantity, ...}]",
+				"common_fields":        "object (optional) - Fields applied to all components {version, effective_date, expiry_date, is_active, scrap_percentage}",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 201,
+				"body": map[string]any{
+					"finished_material_id": 10,
+					"created":              "array of created BOM objects",
+					"failed": []map[string]string{
+						{"component_material_id": "99", "reason": "Duplicate entry"},
+					},
+					"summary": map[string]any{
+						"total_requested": 3,
+						"success_count":   2,
+						"failed_count":    1,
+					},
+				},
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Invalid request | No components | All failed"},
+				"401": map[string]string{"error": "Unauthorized"},
+			},
+		},
+	})
+
+	// Create BOM
+	// POST /bom
+	// Creates a new bill of materials entry defining components needed for a finished material
+	// Input: { finished_material_id, component_material_id, quantity, unit_measure_id?, meta? }
+	// Optional comprehensive fields: scrap_percentage, version, priority, etc.
+	// Response: Created BOM object with all details including material names
+	r.Register(&router.Route{
+		Method:      "POST",
+		Path:        "/bom",
+		HandlerFunc: bomHandler.CreateBillOfMaterialComprehensive,
+		Category:    "bom",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			Body: map[string]string{
+				"finished_material_id":  "int32 (required) - ID of the finished/final product",
+				"component_material_id": "int32 (required) - ID of the component/raw material",
+				"quantity":              "float64 (required) - Quantity of component needed (must be > 0)",
+				"unit_measure_id":       "int32 (optional) - Unit of measure for the quantity",
+				"meta":                  "JSON (optional) - Additional metadata",
+				"scrap_percentage":      "float64 (optional) - Expected waste 0-100 (default: 0)",
+				"version":               "string (optional) - BOM version (default: '1.0')",
+				"priority":              "int32 (optional) - Assembly priority (default: 1)",
+				"fixed_quantity":        "bool (optional) - Quantity doesn't scale with production",
+				"is_optional":           "bool (optional) - Is component optional",
+				"notes":                 "string (optional) - Assembly instructions",
+				"supplier_id":           "int32 (optional) - Preferred supplier",
+				"lead_time_days":        "int32 (optional) - Procurement lead time",
+				"estimated_cost":        "float64 (optional) - Estimated component cost",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 201,
+				"body": map[string]any{
+					"id":                      1,
+					"finished_material_id":    10,
+					"component_material_id":   5,
+					"quantity":                "2.5000",
+					"unit_measure_id":         3,
+					"finished_material_name":  "Wooden Chair",
+					"component_material_name": "Wood Plank",
+					"unit_name":               "Pieces",
+					"created_at":              "2026-01-27T10:00:00Z",
+					"updated_at":              "2026-01-27T10:00:00Z",
+				},
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Invalid request payload | Missing required fields | Invalid quantity (must be > 0)"},
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"409": map[string]string{"error": "BOM entry already exists for this combination"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// Get BOM by ID
+	// GET /bom/{id}
+	// Retrieves a specific bill of materials entry with full details
+	// Response: BOM object with material names, codes, and unit details
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/bom/{id}",
+		HandlerFunc: bomHandler.GetBillOfMaterial,
+		Category:    "bom",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			PathParameters: map[string]string{
+				"id": "int32 (required) - BOM entry ID",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body": map[string]any{
+					"id":                      1,
+					"finished_material_id":    10,
+					"component_material_id":   5,
+					"quantity":                "2.5000",
+					"unit_measure_id":         3,
+					"finished_material_name":  "Wooden Chair",
+					"finished_material_code":  "WC-001",
+					"component_material_name": "Wood Plank",
+					"component_material_code": "WP-100",
+					"unit_name":               "Pieces",
+					"unit_abbreviation":       "pcs",
+					"created_at":              "2026-01-27T10:00:00Z",
+					"updated_at":              "2026-01-27T10:00:00Z",
+				},
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Missing BOM ID | Invalid BOM ID format"},
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"404": map[string]string{"error": "BOM not found"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// Update BOM
+	// PUT /bom/{id}
+	// Updates an existing bill of materials entry
+	// Input: All fields optional - only provided fields will be updated
+	// Supports both basic and comprehensive fields
+	r.Register(&router.Route{
+		Method:      "PUT",
+		Path:        "/bom/{id}",
+		HandlerFunc: bomHandler.UpdateBillOfMaterialComprehensive,
+		Category:    "bom",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			PathParameters: map[string]string{
+				"id": "int32 (required) - BOM entry ID",
+			},
+			Body: map[string]string{
+				"finished_material_id":  "int32 (optional) - New finished material ID",
+				"component_material_id": "int32 (optional) - New component material ID",
+				"quantity":              "float64 (optional) - New quantity (must be > 0)",
+				"unit_measure_id":       "int32 (optional) - New unit of measure ID",
+				"meta":                  "JSON (optional) - New metadata",
+				"scrap_percentage":      "float64 (optional) - 0-100",
+				"version":               "string (optional)",
+				"priority":              "int32 (optional)",
+				"fixed_quantity":        "bool (optional)",
+				"is_optional":           "bool (optional)",
+				"notes":                 "string (optional)",
+				"supplier_id":           "int32 (optional)",
+				"lead_time_days":        "int32 (optional)",
+				"estimated_cost":        "float64 (optional)",
+				"actual_cost":           "float64 (optional)",
+				"is_active":             "bool (optional)",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body": map[string]any{
+					"id":                      1,
+					"finished_material_id":    10,
+					"component_material_id":   5,
+					"quantity":                "3.0000",
+					"unit_measure_id":         3,
+					"finished_material_name":  "Wooden Chair",
+					"finished_material_code":  "WC-001",
+					"component_material_name": "Wood Plank",
+					"component_material_code": "WP-100",
+					"unit_name":               "Pieces",
+					"unit_abbreviation":       "pcs",
+					"created_at":              "2026-01-27T10:00:00Z",
+					"updated_at":              "2026-01-27T10:30:00Z",
+				},
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Missing BOM ID | Invalid BOM ID format | Invalid request payload | Invalid quantity"},
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"404": map[string]string{"error": "BOM not found"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// Delete BOM
+	// DELETE /bom/{id}
+	// Deletes a bill of materials entry
+	r.Register(&router.Route{
+		Method:      "DELETE",
+		Path:        "/bom/{id}",
+		HandlerFunc: bomHandler.DeleteBillOfMaterial,
+		Category:    "bom",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			PathParameters: map[string]string{
+				"id": "int32 (required) - BOM entry ID",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body": map[string]string{
+					"message": "BOM deleted successfully",
+				},
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Missing BOM ID | Invalid BOM ID format"},
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"404": map[string]string{"error": "BOM not found"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// List BOMs with pagination and search
+	// GET /bom?page=1&limit=20&q=chair
+	// Returns paginated list of all BOMs with optional search
+	// Search looks in finished material name/code and component material name/code
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/bom",
+		HandlerFunc: bomHandler.ListBillsOfMaterials,
+		Category:    "bom",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			QueryParameters: map[string]string{
+				"page":  "int (optional, default: 1) - Page number",
+				"limit": "int (optional, default: 20) - Items per page",
+				"q":     "string (optional) - Search query for material names/codes",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body": map[string]any{
+					"boms": []map[string]any{
+						{
+							"id":                      1,
+							"finished_material_id":    10,
+							"component_material_id":   5,
+							"quantity":                "2.5000",
+							"unit_measure_id":         3,
+							"finished_material_name":  "Wooden Chair",
+							"finished_material_code":  "WC-001",
+							"component_material_name": "Wood Plank",
+							"component_material_code": "WP-100",
+							"unit_name":               "Pieces",
+							"unit_abbreviation":       "pcs",
+							"created_at":              "2026-01-27T10:00:00Z",
+							"updated_at":              "2026-01-27T10:00:00Z",
+						},
+					},
+					"pagination": map[string]any{
+						"page":        1,
+						"limit":       20,
+						"total":       45,
+						"total_pages": 3,
+					},
+				},
+			},
+			"error": map[string]any{
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// Get all components for a finished material
+	// GET /bom/finished-material/{id}
+	// Returns all components/raw materials needed to produce a specific finished product
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/bom/finished-material/{id}",
+		HandlerFunc: bomHandler.GetBillOfMaterialsByFinishedMaterial,
+		Category:    "bom",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			PathParameters: map[string]string{
+				"id": "int32 (required) - Finished material ID",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body": map[string]any{
+					"finished_material_id": 10,
+					"components": []map[string]any{
+						{
+							"id":                      1,
+							"finished_material_id":    10,
+							"component_material_id":   5,
+							"quantity":                "2.5000",
+							"unit_measure_id":         3,
+							"finished_material_name":  "Wooden Chair",
+							"finished_material_code":  "WC-001",
+							"component_material_name": "Wood Plank",
+							"component_material_code": "WP-100",
+							"unit_name":               "Pieces",
+							"unit_abbreviation":       "pcs",
+						},
+						{
+							"id":                      2,
+							"finished_material_id":    10,
+							"component_material_id":   7,
+							"quantity":                "4.0000",
+							"unit_measure_id":         3,
+							"finished_material_name":  "Wooden Chair",
+							"finished_material_code":  "WC-001",
+							"component_material_name": "Screws",
+							"component_material_code": "SCR-20",
+							"unit_name":               "Pieces",
+							"unit_abbreviation":       "pcs",
+						},
+					},
+				},
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Missing finished material ID | Invalid finished material ID format"},
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// Get total cost of components for a finished material
+	// GET /bom/finished-material/{id}/cost
+	// Calculates total cost of all components needed (quantity * unit_price)
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/bom/finished-material/{id}/cost",
+		HandlerFunc: bomHandler.GetBOMTotalCost,
+		Category:    "bom",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			PathParameters: map[string]string{
+				"id": "int32 (required) - Finished material ID",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body": map[string]any{
+					"finished_material_id": 10,
+					"total_cost":           125.50,
+				},
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Missing finished material ID | Invalid finished material ID format"},
+				"401": map[string]string{"error": "Unauthorized - Authentication required"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// ============================
+	// Advanced BOM Features
+	// ============================
+	// Note: Basic routes (POST /bom, PUT /bom/{id}) now support ALL comprehensive fields
+	// These specialized routes provide additional functionality
+
+	// Get Active BOMs
+	// GET /bom/active/{id}
+	// Returns only active, effective BOMs for a finished material (excludes expired/inactive)
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/bom/active/{id}",
+		HandlerFunc: bomHandler.GetActiveBOMs,
+		Category:    "bom",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			PathParameters: map[string]string{
+				"id": "int32 (required) - Finished material ID",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body": map[string]any{
+					"finished_material_id": 10,
+					"components":           "Array of active BOM entries with adjusted_quantity, calculated_cost",
+				},
+			},
+			"error": map[string]any{
+				"401": map[string]string{"error": "Unauthorized"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// Get BOM Cost Breakdown
+	// GET /bom/cost-breakdown/{id}
+	// Returns detailed cost breakdown by component including scrap adjustments
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/bom/cost-breakdown/{id}",
+		HandlerFunc: bomHandler.GetBOMCostBreakdown,
+		Category:    "bom",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			PathParameters: map[string]string{
+				"id": "int32 (required) - Finished material ID",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body": map[string]any{
+					"finished_material_id": 10,
+					"breakdown": []map[string]any{
+						{
+							"component_id":      5,
+							"component_name":    "Wood Plank",
+							"quantity":          2.5,
+							"scrap_percentage":  5.0,
+							"adjusted_quantity": 2.625,
+							"unit_price":        10.00,
+							"total_cost":        26.25,
+						},
+					},
+					"total_cost": 125.50,
+				},
+			},
+			"error": map[string]any{
+				"401": map[string]string{"error": "Unauthorized"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// Get BOM Versions
+	// GET /bom/versions/{id}
+	// Lists all versions of a BOM for change tracking
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/bom/versions/{id}",
+		HandlerFunc: bomHandler.GetBOMVersions,
+		Category:    "bom",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			PathParameters: map[string]string{
+				"id": "int32 (required) - Finished material ID",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body": map[string]any{
+					"finished_material_id": 10,
+					"versions": []map[string]any{
+						{
+							"version":         "2.0",
+							"component_count": 5,
+							"effective_date":  "2026-01-01",
+							"expiry_date":     nil,
+							"all_active":      true,
+						},
+					},
+				},
+			},
+			"error": map[string]any{
+				"401": map[string]string{"error": "Unauthorized"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// Archive BOM
+	// POST /bom/archive/{id}
+	// Archives a BOM entry (soft delete)
+	r.Register(&router.Route{
+		Method:      "POST",
+		Path:        "/bom/archive/{id}",
+		HandlerFunc: bomHandler.ArchiveBOM,
+		Category:    "bom",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			PathParameters: map[string]string{
+				"id": "int32 (required) - BOM ID",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body":   "Archived BOM object with archived_at and archived_by set",
+			},
+			"error": map[string]any{
+				"401": map[string]string{"error": "Unauthorized"},
+				"404": map[string]string{"error": "BOM not found"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// Get Optional Components
+	// GET /bom/optional/{id}
+	// Returns all optional components for a finished material
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/bom/optional/{id}",
+		HandlerFunc: bomHandler.GetOptionalComponents,
+		Category:    "bom",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			PathParameters: map[string]string{
+				"id": "int32 (required) - Finished material ID",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body": map[string]any{
+					"finished_material_id": 10,
+					"optional_components": []map[string]any{
+						{
+							"component_id":   15,
+							"component_name": "Premium Finish",
+							"quantity":       1,
+							"priority":       5,
+						},
+					},
+				},
+			},
+			"error": map[string]any{
+				"401": map[string]string{"error": "Unauthorized"},
+				"500": map[string]string{"error": "Internal server error"},
 			},
 		},
 	})
