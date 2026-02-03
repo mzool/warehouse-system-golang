@@ -27,6 +27,8 @@ func NewMaterialHandler(h *handlers.Handler) *MaterialHandler {
 }
 
 func isValidMaterialType(t string) bool {
+	// Normalize input: trim whitespace and convert to lowercase
+	t = strings.ToLower(strings.TrimSpace(t))
 	validTypes := []string{"raw", "intermediate", "finished", "consumable", "service"}
 	for _, valid := range validTypes {
 		if t == valid {
@@ -111,6 +113,9 @@ func (m *MaterialHandler) CreateMaterial(w http.ResponseWriter, r *http.Request)
 		config.RespondBadRequest(w, "Missing required fields", "")
 		return
 	}
+
+	// Normalize type to lowercase
+	req.Type = strings.ToLower(strings.TrimSpace(req.Type))
 
 	if !isValidMaterialType(req.Type) {
 		config.RespondBadRequest(w, "Invalid material type", "Type must be one of: raw, intermediate, finished, consumable, service")
@@ -630,9 +635,14 @@ func (m *MaterialHandler) UpdateMaterial(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Validate material type if provided
-	if req.Type != nil && *req.Type != "" && !isValidMaterialType(*req.Type) {
-		config.RespondBadRequest(w, "Invalid material type", "Type must be one of: raw, intermediate, finished, consumable, service")
-		return
+	if req.Type != nil && *req.Type != "" {
+		// Normalize type to lowercase
+		normalizedType := strings.ToLower(strings.TrimSpace(*req.Type))
+		req.Type = &normalizedType
+		if !isValidMaterialType(*req.Type) {
+			config.RespondBadRequest(w, "Invalid material type", "Type must be one of: raw, intermediate, finished, consumable, service")
+			return
+		}
 	}
 
 	params := db.UpdateMaterialParams{
@@ -778,6 +788,30 @@ func (m *MaterialHandler) ImportFromExcel(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// Build column header map
+	headers := rows[0]
+	colMap := make(map[string]int)
+	for i, header := range headers {
+		colMap[strings.ToLower(strings.TrimSpace(header))] = i
+	}
+
+	// Helper function to get column value safely
+	getCol := func(row []string, colName string) string {
+		if idx, exists := colMap[colName]; exists && idx < len(row) {
+			return strings.TrimSpace(row[idx])
+		}
+		return ""
+	}
+
+	// Validate required columns exist
+	requiredCols := []string{"name", "type", "code", "sku"}
+	for _, col := range requiredCols {
+		if _, exists := colMap[col]; !exists {
+			config.RespondBadRequest(w, "Missing required column", fmt.Sprintf("Excel file must have '%s' column", col))
+			return
+		}
+	}
+
 	tx, err := m.h.DB.Begin(context.Background())
 	if err != nil {
 		config.RespondJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to begin transaction"})
@@ -793,22 +827,17 @@ func (m *MaterialHandler) ImportFromExcel(w http.ResponseWriter, r *http.Request
 
 	for i, row := range rows[1:] {
 		rowNum := i + 2
-		if len(row) < 17 {
-			errorCount++
-			errors = append(errors, fmt.Sprintf("Row %d: insufficient columns", rowNum))
-			continue
-		}
 
-		name := strings.TrimSpace(row[0])
-		code := strings.TrimSpace(row[3])
-		sku := strings.TrimSpace(row[4])
-		materialType := strings.TrimSpace(row[2])
-		categoryName := strings.TrimSpace(row[9])
-		unitAbbr := strings.TrimSpace(row[10])
+		name := getCol(row, "name")
+		code := getCol(row, "code")
+		sku := getCol(row, "sku")
+		materialType := strings.ToLower(getCol(row, "type"))
+		categoryName := getCol(row, "category name")
+		unitAbbr := getCol(row, "unit abbreviation")
 
 		if name == "" || code == "" || sku == "" || materialType == "" {
 			errorCount++
-			errors = append(errors, fmt.Sprintf("Row %d: missing required fields", rowNum))
+			errors = append(errors, fmt.Sprintf("Row %d: missing required fields (name, code, sku, type)", rowNum))
 			continue
 		}
 
@@ -818,21 +847,21 @@ func (m *MaterialHandler) ImportFromExcel(w http.ResponseWriter, r *http.Request
 			continue
 		}
 
-		unitPrice, _ := strconv.ParseFloat(row[7], 64)
-		salePrice, _ := strconv.ParseFloat(row[8], 64)
-		weight, _ := strconv.ParseFloat(row[11], 64)
-		taxRate, _ := strconv.ParseFloat(row[12], 64)
+		unitPrice, _ := strconv.ParseFloat(getCol(row, "unit price"), 64)
+		salePrice, _ := strconv.ParseFloat(getCol(row, "sale price"), 64)
+		weight, _ := strconv.ParseFloat(getCol(row, "weight"), 64)
+		taxRate, _ := strconv.ParseFloat(getCol(row, "tax rate"), 64)
 
 		params := db.BatchCreateMaterialsParams{
 			Name:        name,
 			Code:        code,
 			Sku:         sku,
 			Type:        db.MaterialType(materialType),
-			Saleable:    pgtype.Bool{Bool: strings.ToUpper(row[6]) == "TRUE", Valid: true},
-			IsActive:    pgtype.Bool{Bool: strings.ToUpper(row[16]) == "TRUE", Valid: true},
-			IsToxic:     pgtype.Bool{Bool: strings.ToUpper(row[13]) == "TRUE", Valid: true},
-			IsFlammable: pgtype.Bool{Bool: strings.ToUpper(row[14]) == "TRUE", Valid: true},
-			IsFragile:   pgtype.Bool{Bool: strings.ToUpper(row[15]) == "TRUE", Valid: true},
+			Saleable:    pgtype.Bool{Bool: strings.EqualFold(getCol(row, "saleable"), "TRUE"), Valid: true},
+			IsActive:    pgtype.Bool{Bool: strings.EqualFold(getCol(row, "is active"), "TRUE"), Valid: true},
+			IsToxic:     pgtype.Bool{Bool: strings.EqualFold(getCol(row, "is toxic"), "TRUE"), Valid: true},
+			IsFlammable: pgtype.Bool{Bool: strings.EqualFold(getCol(row, "is flammable"), "TRUE"), Valid: true},
+			IsFragile:   pgtype.Bool{Bool: strings.EqualFold(getCol(row, "is fragile"), "TRUE"), Valid: true},
 		}
 
 		// Lookup category by name
@@ -883,17 +912,30 @@ func (m *MaterialHandler) ImportFromExcel(w http.ResponseWriter, r *http.Request
 			params.TaxRate = n
 		}
 
-		if row[5] != "" {
-			params.Barcode = pgtype.Text{String: strings.TrimSpace(row[5]), Valid: true}
+		barcode := getCol(row, "barcode")
+		if barcode != "" {
+			params.Barcode = pgtype.Text{String: barcode, Valid: true}
 		}
 
-		if row[1] != "" {
-			params.Description = pgtype.Text{String: strings.TrimSpace(row[1]), Valid: true}
+		description := getCol(row, "description")
+		if description != "" {
+			params.Description = pgtype.Text{String: description, Valid: true}
 		}
 
 		batchParams = append(batchParams, params)
 	}
 
+	// If any errors occurred during validation, rollback and return all errors
+	if errorCount > 0 {
+		config.RespondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"error":       "Import failed - no materials were imported due to validation errors",
+			"error_count": errorCount,
+			"errors":      errors,
+		})
+		return
+	}
+
+	// All validations passed, proceed with batch insert
 	successCount := 0
 	if len(batchParams) > 0 {
 		count, err := qtx.BatchCreateMaterials(context.Background(), batchParams)
@@ -910,9 +952,7 @@ func (m *MaterialHandler) ImportFromExcel(w http.ResponseWriter, r *http.Request
 	}
 
 	config.RespondJSON(w, http.StatusOK, map[string]interface{}{
-		"message":       "Import completed",
+		"message":       "Import completed successfully",
 		"success_count": successCount,
-		"error_count":   errorCount,
-		"errors":        errors,
 	})
 }

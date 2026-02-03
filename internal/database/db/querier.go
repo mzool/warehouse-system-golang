@@ -15,11 +15,14 @@ type Querier interface {
 	ArchiveBOM(ctx context.Context, arg ArchiveBOMParams) (ArchiveBOMRow, error)
 	ArchiveMaterial(ctx context.Context, id int32) error
 	BatchCreateMaterials(ctx context.Context, arg []BatchCreateMaterialsParams) (int64, error)
+	BulkCreateQualityInspectionResults(ctx context.Context, arg []BulkCreateQualityInspectionResultsParams) (int64, error)
 	BulkUpdateBOMPriority(ctx context.Context, arg BulkUpdateBOMPriorityParams) error
+	CheckAnalystQualification(ctx context.Context, arg CheckAnalystQualificationParams) (bool, error)
 	CheckBOMExists(ctx context.Context, arg CheckBOMExistsParams) (bool, error)
 	CheckDuplicateCode(ctx context.Context, arg CheckDuplicateCodeParams) (bool, error)
 	CheckDuplicateSKU(ctx context.Context, arg CheckDuplicateSKUParams) (bool, error)
 	CheckMaterialSaleable(ctx context.Context, id int32) (pgtype.Bool, error)
+	CheckOpeningStockExists(ctx context.Context, materialID pgtype.Int4) (bool, error)
 	CheckUnitReferences(ctx context.Context, convertTo pgtype.Int4) (int64, error)
 	CheckUnitUsedByMaterials(ctx context.Context, measureUnitID pgtype.Int4) (int64, error)
 	CloneBOMVersion(ctx context.Context, arg CloneBOMVersionParams) error
@@ -27,7 +30,9 @@ type Querier interface {
 	CountCategories(ctx context.Context) (int64, error)
 	CountCustomers(ctx context.Context) (int64, error)
 	CountMaterials(ctx context.Context, arg CountMaterialsParams) (int64, error)
+	CountNonConformanceReportsByStatus(ctx context.Context, status NullNcrStatus) (int64, error)
 	CountPurchaseOrders(ctx context.Context) (int64, error)
+	CountQualityInspectionsByStatus(ctx context.Context, inspectionStatus NullQualityInspectionStatus) (int64, error)
 	CountSalesOrders(ctx context.Context) (int64, error)
 	CountSearchBillsOfMaterials(ctx context.Context, query pgtype.Text) (int64, error)
 	CountSearchCustomers(ctx context.Context, query pgtype.Text) (int64, error)
@@ -37,66 +42,226 @@ type Querier interface {
 	CountSuppliers(ctx context.Context) (int64, error)
 	CountUnits(ctx context.Context) (int64, error)
 	CountUsers(ctx context.Context) (int64, error)
+	// ============================================================================
+	// ANALYST QUALIFICATIONS
+	// ============================================================================
+	CreateAnalystQualification(ctx context.Context, arg CreateAnalystQualificationParams) (AnalystQualification, error)
+	CreateBatch(ctx context.Context, arg CreateBatchParams) (Batch, error)
 	CreateBillOfMaterial(ctx context.Context, arg CreateBillOfMaterialParams) (CreateBillOfMaterialRow, error)
 	CreateCategory(ctx context.Context, arg CreateCategoryParams) (MaterialCategory, error)
+	// ============================================================================
+	// CERTIFICATES OF ANALYSIS
+	// ============================================================================
+	CreateCertificateOfAnalysis(ctx context.Context, arg CreateCertificateOfAnalysisParams) (CertificatesOfAnalysis, error)
 	CreateCustomer(ctx context.Context, arg CreateCustomerParams) (Customer, error)
+	// ============================================================================
+	// LAB EQUIPMENT
+	// ============================================================================
+	CreateLabEquipment(ctx context.Context, arg CreateLabEquipmentParams) (LabEquipment, error)
+	// ============================================================================
+	// LAB SAMPLES
+	// ============================================================================
+	CreateLabSample(ctx context.Context, arg CreateLabSampleParams) (LabSample, error)
+	// ============================================================================
+	// LAB TEST ASSIGNMENTS
+	// ============================================================================
+	CreateLabTestAssignment(ctx context.Context, arg CreateLabTestAssignmentParams) (LabTestAssignment, error)
+	// ============================================================================
+	// LAB TEST METHODS
+	// ============================================================================
+	CreateLabTestMethod(ctx context.Context, arg CreateLabTestMethodParams) (LabTestMethod, error)
+	// ============================================================================
+	// LAB TEST RESULTS
+	// ============================================================================
+	CreateLabTestResult(ctx context.Context, arg CreateLabTestResultParams) (LabTestResult, error)
 	CreateMaterial(ctx context.Context, arg CreateMaterialParams) (Material, error)
+	// ============================================================================
+	// MATERIAL QUALITY SPECS
+	// ============================================================================
+	CreateMaterialQualitySpec(ctx context.Context, arg CreateMaterialQualitySpecParams) (MaterialQualitySpec, error)
+	// ============================================================================
+	// NON-CONFORMANCE REPORTS (NCR)
+	// ============================================================================
+	CreateNonConformanceReport(ctx context.Context, arg CreateNonConformanceReportParams) (NonConformanceReport, error)
+	// ============================================================================
+	// OOS INVESTIGATIONS
+	// ============================================================================
+	CreateOOSInvestigation(ctx context.Context, arg CreateOOSInvestigationParams) (OosInvestigation, error)
 	CreatePurchaseOrder(ctx context.Context, arg CreatePurchaseOrderParams) (PurchaseOrder, error)
 	CreatePurchaseOrderItem(ctx context.Context, arg CreatePurchaseOrderItemParams) (PurchaseOrderItem, error)
+	// ============================================================================
+	// QUALITY HOLDS
+	// ============================================================================
+	CreateQualityHold(ctx context.Context, arg CreateQualityHoldParams) (QualityHold, error)
+	// ============================================================================
+	// QUALITY INSPECTIONS
+	// ============================================================================
+	CreateQualityInspection(ctx context.Context, arg CreateQualityInspectionParams) (QualityInspection, error)
+	// ============================================================================
+	// QUALITY INSPECTION CRITERIA
+	// ============================================================================
+	CreateQualityInspectionCriteria(ctx context.Context, arg CreateQualityInspectionCriteriaParams) (QualityInspectionCriterium, error)
+	// ============================================================================
+	// QUALITY INSPECTION RESULTS
+	// ============================================================================
+	CreateQualityInspectionResult(ctx context.Context, arg CreateQualityInspectionResultParams) (QualityInspectionResult, error)
 	CreateSalesOrder(ctx context.Context, arg CreateSalesOrderParams) (SalesOrder, error)
 	CreateSalesOrderItem(ctx context.Context, arg CreateSalesOrderItemParams) (SalesOrderItem, error)
+	// ============================================================================
+	// STABILITY SAMPLES
+	// ============================================================================
+	CreateStabilitySample(ctx context.Context, arg CreateStabilitySampleParams) (StabilitySample, error)
+	// ============================================================================
+	// STABILITY STUDIES
+	// ============================================================================
+	CreateStabilityStudy(ctx context.Context, arg CreateStabilityStudyParams) (StabilityStudy, error)
+	// =====================================================
+	// STOCK MOVEMENT QUERIES
+	// =====================================================
+	CreateStockMovement(ctx context.Context, arg CreateStockMovementParams) (StockMovement, error)
 	CreateSupplier(ctx context.Context, arg CreateSupplierParams) (Supplier, error)
+	// ============================================================================
+	// SUPPLIER QUALITY RATINGS
+	// ============================================================================
+	CreateSupplierQualityRating(ctx context.Context, arg CreateSupplierQualityRatingParams) (SupplierQualityRating, error)
 	CreateUnit(ctx context.Context, arg CreateUnitParams) (MeasureUnit, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error)
 	CreateWarehouse(ctx context.Context, arg CreateWarehouseParams) (Warehouse, error)
 	DeactivateUser(ctx context.Context, id int32) error
+	DeleteAnalystQualification(ctx context.Context, id int32) error
 	DeleteBillOfMaterial(ctx context.Context, id int32) error
 	DeleteBillOfMaterialsByComponent(ctx context.Context, componentMaterialID pgtype.Int4) error
 	DeleteBillOfMaterialsByFinishedMaterial(ctx context.Context, finishedMaterialID pgtype.Int4) error
 	DeleteCategory(ctx context.Context, id int32) error
+	DeleteCertificateOfAnalysis(ctx context.Context, id int32) error
 	DeleteCustomer(ctx context.Context, id int32) error
+	DeleteLabEquipment(ctx context.Context, id int32) error
+	DeleteLabSample(ctx context.Context, id int32) error
+	DeleteLabTestAssignment(ctx context.Context, id int32) error
+	DeleteLabTestMethod(ctx context.Context, id int32) error
+	DeleteLabTestResult(ctx context.Context, id int32) error
 	DeleteMaterial(ctx context.Context, id int32) error
+	DeleteMaterialQualitySpec(ctx context.Context, id int32) error
+	DeleteMaterialQualitySpecsByMaterial(ctx context.Context, materialID int32) error
+	DeleteNonConformanceReport(ctx context.Context, id int32) error
+	DeleteOOSInvestigation(ctx context.Context, id int32) error
 	DeletePurchaseOrder(ctx context.Context, id int32) error
 	DeletePurchaseOrderItem(ctx context.Context, id int32) error
+	DeleteQualityHold(ctx context.Context, id int32) error
+	DeleteQualityInspection(ctx context.Context, id int32) error
+	DeleteQualityInspectionCriteria(ctx context.Context, id int32) error
+	DeleteQualityInspectionResult(ctx context.Context, id int32) error
 	DeleteSalesOrder(ctx context.Context, id int32) error
 	DeleteSalesOrderItem(ctx context.Context, id int32) error
+	DeleteStabilitySample(ctx context.Context, id int32) error
+	DeleteStabilityStudy(ctx context.Context, id int32) error
 	DeleteSupplier(ctx context.Context, id int32) error
+	DeleteSupplierQualityRating(ctx context.Context, id int32) error
 	DeleteUnit(ctx context.Context, id int32) error
 	DeleteUser(ctx context.Context, id int32) error
 	DeleteWarehouse(ctx context.Context, id int32) error
 	ExportAllMaterials(ctx context.Context) ([]ExportAllMaterialsRow, error)
 	GetActiveBOMsByFinishedMaterial(ctx context.Context, finishedMaterialID pgtype.Int4) ([]GetActiveBOMsByFinishedMaterialRow, error)
+	GetAnalystProductivity(ctx context.Context, arg GetAnalystProductivityParams) ([]GetAnalystProductivityRow, error)
+	GetAnalystQualificationByID(ctx context.Context, id int32) (GetAnalystQualificationByIDRow, error)
+	// =====================================================
+	// BATCH ALLOCATION QUERIES (for manual selection)
+	// =====================================================
+	GetAvailableBatchesForMaterial(ctx context.Context, arg GetAvailableBatchesForMaterialParams) ([]GetAvailableBatchesForMaterialRow, error)
 	GetBOMCostBreakdown(ctx context.Context, finishedMaterialID pgtype.Int4) ([]GetBOMCostBreakdownRow, error)
 	GetBOMTotalCost(ctx context.Context, finishedMaterialID pgtype.Int4) (interface{}, error)
 	GetBOMVersions(ctx context.Context, finishedMaterialID pgtype.Int4) ([]GetBOMVersionsRow, error)
 	GetBOMsBySupplier(ctx context.Context, supplierID pgtype.Int4) ([]GetBOMsBySupplierRow, error)
 	GetBOMsByVersion(ctx context.Context, arg GetBOMsByVersionParams) ([]GetBOMsByVersionRow, error)
+	GetBatchByID(ctx context.Context, id int32) (Batch, error)
+	GetBatchesByIDs(ctx context.Context, dollar_1 []int32) ([]Batch, error)
+	GetBatchesByWarehouseAndMaterial(ctx context.Context, arg GetBatchesByWarehouseAndMaterialParams) ([]Batch, error)
+	GetBatchesByWarehouseAndMaterialLIFO(ctx context.Context, arg GetBatchesByWarehouseAndMaterialLIFOParams) ([]Batch, error)
 	GetBillOfMaterialByID(ctx context.Context, id int32) (GetBillOfMaterialByIDRow, error)
 	GetBillOfMaterialsByComponent(ctx context.Context, componentMaterialID pgtype.Int4) ([]GetBillOfMaterialsByComponentRow, error)
 	GetBillOfMaterialsByFinishedMaterial(ctx context.Context, finishedMaterialID pgtype.Int4) ([]GetBillOfMaterialsByFinishedMaterialRow, error)
 	GetCategoryByID(ctx context.Context, id int32) (MaterialCategory, error)
 	GetCategoryByName(ctx context.Context, name string) (MaterialCategory, error)
+	GetCertificateOfAnalysisByID(ctx context.Context, id int32) (GetCertificateOfAnalysisByIDRow, error)
+	GetCertificateOfAnalysisByNumber(ctx context.Context, coaNumber string) (CertificatesOfAnalysis, error)
+	// =====================================================
+	// STOCK LEVEL QUERIES
+	// =====================================================
+	GetCurrentStockLevel(ctx context.Context, arg GetCurrentStockLevelParams) (GetCurrentStockLevelRow, error)
 	GetCustomerByEmail(ctx context.Context, contactEmail pgtype.Text) (Customer, error)
 	GetCustomerByID(ctx context.Context, id int32) (Customer, error)
 	GetCustomerByName(ctx context.Context, name string) (Customer, error)
 	GetCustomerByPhone(ctx context.Context, contactPhone pgtype.Text) (Customer, error)
+	GetInspectionStatsByMaterial(ctx context.Context, materialID pgtype.Int4) (GetInspectionStatsByMaterialRow, error)
+	// ============================================================================
+	// STATISTICS & REPORTS
+	// ============================================================================
+	GetLabDashboardStats(ctx context.Context) (GetLabDashboardStatsRow, error)
+	GetLabEquipmentByCode(ctx context.Context, equipmentCode string) (LabEquipment, error)
+	GetLabEquipmentByID(ctx context.Context, id int32) (GetLabEquipmentByIDRow, error)
+	GetLabSampleByID(ctx context.Context, id int32) (GetLabSampleByIDRow, error)
+	GetLabSampleByNumber(ctx context.Context, sampleNumber string) (LabSample, error)
+	GetLabTestAssignmentByID(ctx context.Context, id int32) (GetLabTestAssignmentByIDRow, error)
+	GetLabTestMethodByCode(ctx context.Context, methodCode string) (LabTestMethod, error)
+	GetLabTestMethodByID(ctx context.Context, id int32) (GetLabTestMethodByIDRow, error)
+	GetLabTestResultByID(ctx context.Context, id int32) (GetLabTestResultByIDRow, error)
+	// =====================================================
+	// BATCH QUERIES
+	// =====================================================
+	GetLastBatchNumberForMaterial(ctx context.Context, materialID pgtype.Int4) (string, error)
+	GetLatestSupplierQualityRating(ctx context.Context, supplierID int32) (SupplierQualityRating, error)
 	GetMaterialByCode(ctx context.Context, code string) (GetMaterialByCodeRow, error)
 	GetMaterialByID(ctx context.Context, id int32) (GetMaterialByIDRow, error)
 	// ============================================================================
 	// GET MATERIAL BY SKU
 	// ============================================================================
 	GetMaterialBySKU(ctx context.Context, sku string) (GetMaterialBySKURow, error)
+	GetMaterialQualitySpecByID(ctx context.Context, id int32) (MaterialQualitySpec, error)
+	// =====================================================
+	// VALUATION METHOD QUERIES
+	// =====================================================
+	GetMaterialValuationMethod(ctx context.Context, arg GetMaterialValuationMethodParams) (ValuationMethod, error)
+	GetNonConformanceReportByID(ctx context.Context, id int32) (GetNonConformanceReportByIDRow, error)
+	GetNonConformanceReportByNumber(ctx context.Context, ncrNumber string) (NonConformanceReport, error)
+	GetOOSInvestigationByID(ctx context.Context, id int32) (GetOOSInvestigationByIDRow, error)
+	GetOOSInvestigationByNumber(ctx context.Context, oosNumber string) (OosInvestigation, error)
 	GetOptionalComponents(ctx context.Context, finishedMaterialID pgtype.Int4) ([]GetOptionalComponentsRow, error)
 	GetPurchaseOrderByID(ctx context.Context, id int32) (PurchaseOrder, error)
 	GetPurchaseOrderByOrderNumber(ctx context.Context, orderNumber string) (PurchaseOrder, error)
 	GetPurchaseOrderItemByID(ctx context.Context, id int32) (PurchaseOrderItem, error)
+	// ============================================================================
+	// STATISTICS & REPORTS
+	// ============================================================================
+	GetQualityDashboardStats(ctx context.Context) (GetQualityDashboardStatsRow, error)
+	GetQualityHoldByID(ctx context.Context, id int32) (GetQualityHoldByIDRow, error)
+	GetQualityHoldByNumber(ctx context.Context, holdNumber string) (QualityHold, error)
+	GetQualityInspectionByID(ctx context.Context, id int32) (GetQualityInspectionByIDRow, error)
+	GetQualityInspectionByNumber(ctx context.Context, inspectionNumber string) (QualityInspection, error)
+	GetQualityInspectionCriteriaByID(ctx context.Context, id int32) (QualityInspectionCriterium, error)
+	GetQualityInspectionResultByID(ctx context.Context, id int32) (QualityInspectionResult, error)
+	GetQualityInspectionTrends(ctx context.Context, arg GetQualityInspectionTrendsParams) ([]GetQualityInspectionTrendsRow, error)
+	// =====================================================
+	// TRANSACTION-SPECIFIC QUERIES
+	// =====================================================
+	GetSaleOrderItemsWithBatches(ctx context.Context, salesOrderID pgtype.Int4) ([]GetSaleOrderItemsWithBatchesRow, error)
 	GetSalesOrderByID(ctx context.Context, id int32) (SalesOrder, error)
 	GetSalesOrderByOrderNumber(ctx context.Context, orderNumber string) (SalesOrder, error)
 	GetSalesOrderItemByID(ctx context.Context, id int32) (SalesOrderItem, error)
+	GetStabilitySampleByID(ctx context.Context, id int32) (GetStabilitySampleByIDRow, error)
+	GetStabilityStudyByID(ctx context.Context, id int32) (GetStabilityStudyByIDRow, error)
+	GetStabilityStudyByNumber(ctx context.Context, studyNumber string) (StabilityStudy, error)
+	GetStockLevelsByMaterial(ctx context.Context, id int32) ([]GetStockLevelsByMaterialRow, error)
+	GetStockLevelsByWarehouse(ctx context.Context) ([]GetStockLevelsByWarehouseRow, error)
+	GetStockMovementByID(ctx context.Context, id int32) (StockMovement, error)
+	GetStockMovementHistory(ctx context.Context, arg GetStockMovementHistoryParams) ([]GetStockMovementHistoryRow, error)
+	GetStockMovementsByReference(ctx context.Context, reference pgtype.Text) ([]StockMovement, error)
 	GetSupplierByEmail(ctx context.Context, contactEmail pgtype.Text) (Supplier, error)
 	GetSupplierByID(ctx context.Context, id int32) (Supplier, error)
 	GetSupplierByName(ctx context.Context, name string) (Supplier, error)
 	GetSupplierByPhone(ctx context.Context, contactPhone pgtype.Text) (Supplier, error)
+	GetSupplierQualityRatingByID(ctx context.Context, id int32) (GetSupplierQualityRatingByIDRow, error)
+	GetTopDefectiveMaterials(ctx context.Context, limit int32) ([]GetTopDefectiveMaterialsRow, error)
+	GetTransferOutMovementDetails(ctx context.Context, id int32) (StockMovement, error)
 	GetUnitByAbbreviation(ctx context.Context, abbreviation string) (MeasureUnit, error)
 	GetUnitByID(ctx context.Context, id int32) (MeasureUnit, error)
 	GetUnitByName(ctx context.Context, name string) (MeasureUnit, error)
@@ -107,50 +272,138 @@ type Querier interface {
 	GetWarehouseByCode(ctx context.Context, code string) (Warehouse, error)
 	GetWarehouseByID(ctx context.Context, id int32) (Warehouse, error)
 	GetWarehouseByName(ctx context.Context, name string) (Warehouse, error)
+	GetWarehouseStockMovements(ctx context.Context, arg GetWarehouseStockMovementsParams) ([]GetWarehouseStockMovementsRow, error)
 	ListActiveMaterials(ctx context.Context, arg ListActiveMaterialsParams) ([]ListActiveMaterialsRow, error)
+	ListActiveQualityHolds(ctx context.Context, arg ListActiveQualityHoldsParams) ([]QualityHold, error)
+	ListActiveStabilityStudies(ctx context.Context) ([]StabilityStudy, error)
+	ListAllQualityInspectionCriteria(ctx context.Context, arg ListAllQualityInspectionCriteriaParams) ([]QualityInspectionCriterium, error)
+	ListAnalystQualifications(ctx context.Context, analystID int32) ([]ListAnalystQualificationsRow, error)
 	ListBillsOfMaterials(ctx context.Context, arg ListBillsOfMaterialsParams) ([]ListBillsOfMaterialsRow, error)
 	ListCategories(ctx context.Context, arg ListCategoriesParams) ([]MaterialCategory, error)
+	ListCertificatesOfAnalysis(ctx context.Context, arg ListCertificatesOfAnalysisParams) ([]ListCertificatesOfAnalysisRow, error)
+	ListCertificatesOfAnalysisByBatch(ctx context.Context, batchNumber string) ([]CertificatesOfAnalysis, error)
+	ListCertificatesOfAnalysisByCustomer(ctx context.Context, arg ListCertificatesOfAnalysisByCustomerParams) ([]CertificatesOfAnalysis, error)
+	ListCertificatesOfAnalysisByMaterial(ctx context.Context, materialID int32) ([]CertificatesOfAnalysis, error)
+	ListCertificatesOfAnalysisByStatus(ctx context.Context, arg ListCertificatesOfAnalysisByStatusParams) ([]CertificatesOfAnalysis, error)
 	ListCustomers(ctx context.Context, arg ListCustomersParams) ([]Customer, error)
+	ListExpiringQualifications(ctx context.Context, expiryDate pgtype.Date) ([]ListExpiringQualificationsRow, error)
+	ListFailedInspectionResults(ctx context.Context, inspectionID int32) ([]QualityInspectionResult, error)
+	ListLabEquipment(ctx context.Context, arg ListLabEquipmentParams) ([]ListLabEquipmentRow, error)
+	ListLabEquipmentByCalibrationStatus(ctx context.Context, arg ListLabEquipmentByCalibrationStatusParams) ([]LabEquipment, error)
+	ListLabEquipmentByType(ctx context.Context, equipmentType string) ([]LabEquipment, error)
+	ListLabEquipmentCalibrationDue(ctx context.Context, nextCalibrationDate pgtype.Date) ([]LabEquipment, error)
+	ListLabSamples(ctx context.Context, arg ListLabSamplesParams) ([]ListLabSamplesRow, error)
+	ListLabSamplesByBatch(ctx context.Context, batchNumber pgtype.Text) ([]LabSample, error)
+	ListLabSamplesByMaterial(ctx context.Context, materialID pgtype.Int4) ([]LabSample, error)
+	ListLabSamplesByStatus(ctx context.Context, arg ListLabSamplesByStatusParams) ([]LabSample, error)
+	ListLabSamplesByType(ctx context.Context, arg ListLabSamplesByTypeParams) ([]LabSample, error)
+	ListLabSamplesPendingDisposal(ctx context.Context, retentionExpiryDate pgtype.Date) ([]LabSample, error)
+	ListLabTestAssignments(ctx context.Context, arg ListLabTestAssignmentsParams) ([]ListLabTestAssignmentsRow, error)
+	ListLabTestAssignmentsByAnalyst(ctx context.Context, arg ListLabTestAssignmentsByAnalystParams) ([]LabTestAssignment, error)
+	ListLabTestAssignmentsBySample(ctx context.Context, sampleID int32) ([]ListLabTestAssignmentsBySampleRow, error)
+	ListLabTestAssignmentsByStatus(ctx context.Context, arg ListLabTestAssignmentsByStatusParams) ([]LabTestAssignment, error)
+	ListLabTestMethods(ctx context.Context, arg ListLabTestMethodsParams) ([]ListLabTestMethodsRow, error)
+	ListLabTestMethodsByStatus(ctx context.Context, arg ListLabTestMethodsByStatusParams) ([]LabTestMethod, error)
+	ListLabTestMethodsByType(ctx context.Context, testType string) ([]LabTestMethod, error)
+	ListLabTestResults(ctx context.Context, testAssignmentID int32) ([]ListLabTestResultsRow, error)
+	ListLabTestResultsByAnalyst(ctx context.Context, arg ListLabTestResultsByAnalystParams) ([]LabTestResult, error)
+	ListLabTestResultsOutOfSpec(ctx context.Context, arg ListLabTestResultsOutOfSpecParams) ([]ListLabTestResultsOutOfSpecRow, error)
+	ListMaterialQualitySpecs(ctx context.Context, materialID int32) ([]ListMaterialQualitySpecsRow, error)
 	ListMonthAuditLogs(ctx context.Context, arg ListMonthAuditLogsParams) ([]AuditLog, error)
+	ListNonConformanceReports(ctx context.Context, arg ListNonConformanceReportsParams) ([]ListNonConformanceReportsRow, error)
+	ListNonConformanceReportsByMaterial(ctx context.Context, materialID pgtype.Int4) ([]NonConformanceReport, error)
+	ListNonConformanceReportsBySeverity(ctx context.Context, arg ListNonConformanceReportsBySeverityParams) ([]NonConformanceReport, error)
+	ListNonConformanceReportsByStatus(ctx context.Context, arg ListNonConformanceReportsByStatusParams) ([]NonConformanceReport, error)
+	ListNonConformanceReportsBySupplier(ctx context.Context, supplierID pgtype.Int4) ([]NonConformanceReport, error)
+	ListNonConformanceReportsByType(ctx context.Context, arg ListNonConformanceReportsByTypeParams) ([]NonConformanceReport, error)
+	ListOOSInvestigations(ctx context.Context, arg ListOOSInvestigationsParams) ([]ListOOSInvestigationsRow, error)
+	ListOOSInvestigationsByStatus(ctx context.Context, arg ListOOSInvestigationsByStatusParams) ([]OosInvestigation, error)
+	ListOpenNonConformanceReports(ctx context.Context, arg ListOpenNonConformanceReportsParams) ([]NonConformanceReport, error)
+	ListOpenOOSInvestigations(ctx context.Context) ([]OosInvestigation, error)
+	ListOperationalLabEquipment(ctx context.Context) ([]LabEquipment, error)
+	ListOverdueLabTestAssignments(ctx context.Context) ([]LabTestAssignment, error)
+	ListOverdueNCRActions(ctx context.Context) ([]NonConformanceReport, error)
+	ListPendingInspections(ctx context.Context, arg ListPendingInspectionsParams) ([]QualityInspection, error)
+	ListPendingLabTestAssignments(ctx context.Context, arg ListPendingLabTestAssignmentsParams) ([]LabTestAssignment, error)
 	ListPurchaseOrderItems(ctx context.Context, purchaseOrderID pgtype.Int4) ([]PurchaseOrderItem, error)
 	ListPurchaseOrders(ctx context.Context, arg ListPurchaseOrdersParams) ([]PurchaseOrder, error)
 	ListPurchaseOrdersByStatus(ctx context.Context, arg ListPurchaseOrdersByStatusParams) ([]PurchaseOrder, error)
 	ListPurchaseOrdersBySupplier(ctx context.Context, arg ListPurchaseOrdersBySupplierParams) ([]PurchaseOrder, error)
+	ListQualifiedAnalystsForMethod(ctx context.Context, testMethodID int32) ([]ListQualifiedAnalystsForMethodRow, error)
+	ListQualityHolds(ctx context.Context, arg ListQualityHoldsParams) ([]ListQualityHoldsRow, error)
+	ListQualityHoldsByBatch(ctx context.Context, batchNumber pgtype.Text) ([]QualityHold, error)
+	ListQualityHoldsByMaterial(ctx context.Context, materialID int32) ([]QualityHold, error)
+	ListQualityHoldsByStatus(ctx context.Context, arg ListQualityHoldsByStatusParams) ([]QualityHold, error)
+	ListQualityInspectionCriteria(ctx context.Context) ([]QualityInspectionCriterium, error)
+	ListQualityInspectionResults(ctx context.Context, inspectionID int32) ([]ListQualityInspectionResultsRow, error)
+	ListQualityInspections(ctx context.Context, arg ListQualityInspectionsParams) ([]ListQualityInspectionsRow, error)
+	ListQualityInspectionsByBatch(ctx context.Context, batchNumber pgtype.Text) ([]QualityInspection, error)
+	ListQualityInspectionsByMaterial(ctx context.Context, arg ListQualityInspectionsByMaterialParams) ([]QualityInspection, error)
+	ListQualityInspectionsByStatus(ctx context.Context, arg ListQualityInspectionsByStatusParams) ([]QualityInspection, error)
+	ListQualityInspectionsBySupplier(ctx context.Context, arg ListQualityInspectionsBySupplierParams) ([]QualityInspection, error)
+	ListQualityInspectionsByType(ctx context.Context, arg ListQualityInspectionsByTypeParams) ([]QualityInspection, error)
 	ListSalesOrderItems(ctx context.Context, salesOrderID pgtype.Int4) ([]SalesOrderItem, error)
 	ListSalesOrders(ctx context.Context, arg ListSalesOrdersParams) ([]SalesOrder, error)
 	ListSalesOrdersByCustomer(ctx context.Context, arg ListSalesOrdersByCustomerParams) ([]SalesOrder, error)
 	ListSalesOrdersByStatus(ctx context.Context, arg ListSalesOrdersByStatusParams) ([]SalesOrder, error)
+	ListStabilitySamplesByStudy(ctx context.Context, stabilityStudyID int32) ([]ListStabilitySamplesByStudyRow, error)
+	ListStabilitySamplesDue(ctx context.Context, scheduledPullDate pgtype.Date) ([]ListStabilitySamplesDueRow, error)
+	ListStabilityStudies(ctx context.Context, arg ListStabilityStudiesParams) ([]ListStabilityStudiesRow, error)
+	ListStabilityStudiesByMaterial(ctx context.Context, materialID int32) ([]StabilityStudy, error)
+	ListStabilityStudiesByStatus(ctx context.Context, arg ListStabilityStudiesByStatusParams) ([]StabilityStudy, error)
+	ListSupplierQualityRatings(ctx context.Context, arg ListSupplierQualityRatingsParams) ([]ListSupplierQualityRatingsRow, error)
+	ListSupplierQualityRatingsBySupplier(ctx context.Context, supplierID int32) ([]SupplierQualityRating, error)
 	ListSuppliers(ctx context.Context, arg ListSuppliersParams) ([]Supplier, error)
+	ListSuppliersByQualityRating(ctx context.Context) ([]ListSuppliersByQualityRatingRow, error)
 	ListUnits(ctx context.Context, arg ListUnitsParams) ([]ListUnitsRow, error)
 	ListUsers(ctx context.Context, arg ListUsersParams) ([]ListUsersRow, error)
 	ListWarehouses(ctx context.Context, arg ListWarehousesParams) ([]Warehouse, error)
 	LogAudit(ctx context.Context, arg LogAuditParams) error
+	ReleaseQualityHold(ctx context.Context, arg ReleaseQualityHoldParams) (QualityHold, error)
 	RestoreMaterial(ctx context.Context, id int32) error
 	SearchBillsOfMaterials(ctx context.Context, arg SearchBillsOfMaterialsParams) ([]SearchBillsOfMaterialsRow, error)
 	SearchCustomers(ctx context.Context, arg SearchCustomersParams) ([]Customer, error)
+	SearchLabTestMethods(ctx context.Context, arg SearchLabTestMethodsParams) ([]LabTestMethod, error)
 	// ============================================================================
 	// SEARCH MATERIALS (with filters and pagination)
 	// ============================================================================
 	SearchMaterials(ctx context.Context, arg SearchMaterialsParams) ([]SearchMaterialsRow, error)
 	SearchPurchaseOrders(ctx context.Context, arg SearchPurchaseOrdersParams) ([]PurchaseOrder, error)
+	SearchQualityInspectionCriteria(ctx context.Context, arg SearchQualityInspectionCriteriaParams) ([]QualityInspectionCriterium, error)
 	SearchSalesOrders(ctx context.Context, arg SearchSalesOrdersParams) ([]SalesOrder, error)
 	SearchSuppliers(ctx context.Context, arg SearchSuppliersParams) ([]Supplier, error)
 	UnarchiveBOM(ctx context.Context, id int32) (UnarchiveBOMRow, error)
+	UpdateAnalystQualification(ctx context.Context, arg UpdateAnalystQualificationParams) (AnalystQualification, error)
 	UpdateBOMActualCost(ctx context.Context, arg UpdateBOMActualCostParams) error
+	UpdateBatchQuantity(ctx context.Context, arg UpdateBatchQuantityParams) (Batch, error)
 	UpdateBillOfMaterial(ctx context.Context, arg UpdateBillOfMaterialParams) (UpdateBillOfMaterialRow, error)
 	UpdateCategory(ctx context.Context, arg UpdateCategoryParams) (MaterialCategory, error)
+	UpdateCertificateOfAnalysis(ctx context.Context, arg UpdateCertificateOfAnalysisParams) (CertificatesOfAnalysis, error)
 	UpdateCustomer(ctx context.Context, arg UpdateCustomerParams) (Customer, error)
+	UpdateLabEquipment(ctx context.Context, arg UpdateLabEquipmentParams) (LabEquipment, error)
+	UpdateLabSample(ctx context.Context, arg UpdateLabSampleParams) (LabSample, error)
+	UpdateLabTestAssignment(ctx context.Context, arg UpdateLabTestAssignmentParams) (LabTestAssignment, error)
+	UpdateLabTestMethod(ctx context.Context, arg UpdateLabTestMethodParams) (LabTestMethod, error)
 	// ============================================================================
 	// UPDATE MATERIAL
 	// ============================================================================
 	UpdateMaterial(ctx context.Context, arg UpdateMaterialParams) (Material, error)
+	UpdateMaterialQualitySpec(ctx context.Context, arg UpdateMaterialQualitySpecParams) (MaterialQualitySpec, error)
+	UpdateNonConformanceReport(ctx context.Context, arg UpdateNonConformanceReportParams) (NonConformanceReport, error)
+	UpdateOOSInvestigation(ctx context.Context, arg UpdateOOSInvestigationParams) (OosInvestigation, error)
 	UpdatePurchaseOrder(ctx context.Context, arg UpdatePurchaseOrderParams) (PurchaseOrder, error)
 	UpdatePurchaseOrderItem(ctx context.Context, arg UpdatePurchaseOrderItemParams) (PurchaseOrderItem, error)
 	UpdatePurchaseOrderItemReceivedQuantity(ctx context.Context, arg UpdatePurchaseOrderItemReceivedQuantityParams) (PurchaseOrderItem, error)
+	UpdateQualityHold(ctx context.Context, arg UpdateQualityHoldParams) (QualityHold, error)
+	UpdateQualityInspection(ctx context.Context, arg UpdateQualityInspectionParams) (QualityInspection, error)
+	UpdateQualityInspectionCriteria(ctx context.Context, arg UpdateQualityInspectionCriteriaParams) (QualityInspectionCriterium, error)
 	UpdateSalesOrder(ctx context.Context, arg UpdateSalesOrderParams) (SalesOrder, error)
 	UpdateSalesOrderItem(ctx context.Context, arg UpdateSalesOrderItemParams) (SalesOrderItem, error)
 	UpdateSalesOrderItemShippedQuantity(ctx context.Context, arg UpdateSalesOrderItemShippedQuantityParams) (SalesOrderItem, error)
+	UpdateStabilitySample(ctx context.Context, arg UpdateStabilitySampleParams) (StabilitySample, error)
+	UpdateStabilityStudy(ctx context.Context, arg UpdateStabilityStudyParams) (StabilityStudy, error)
 	UpdateSupplier(ctx context.Context, arg UpdateSupplierParams) (Supplier, error)
+	UpdateSupplierQualityRating(ctx context.Context, arg UpdateSupplierQualityRatingParams) (SupplierQualityRating, error)
 	UpdateUnit(ctx context.Context, arg UpdateUnitParams) (MeasureUnit, error)
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (UpdateUserRow, error)
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error

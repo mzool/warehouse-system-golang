@@ -368,7 +368,7 @@ SELECT
     mu.abbreviation as unit_abbreviation,
     s.name as supplier_name,
     alt.name as alternate_component_name,
-    (b.quantity * (1 + (b.scrap_percentage / 100))) as adjusted_quantity,
+    CAST(b.quantity * (1 + (b.scrap_percentage / 100)) AS DECIMAL(15,4)) as adjusted_quantity,
     COALESCE(b.estimated_cost, b.quantity * (1 + (b.scrap_percentage / 100)) * COALESCE(cm.unit_price, 0)) as calculated_cost
 FROM bills_of_materials b
 LEFT JOIN materials cm ON b.component_material_id = cm.id
@@ -416,7 +416,7 @@ type GetActiveBOMsByFinishedMaterialRow struct {
 	UnitAbbreviation       pgtype.Text        `json:"unit_abbreviation"`
 	SupplierName           pgtype.Text        `json:"supplier_name"`
 	AlternateComponentName pgtype.Text        `json:"alternate_component_name"`
-	AdjustedQuantity       int32              `json:"adjusted_quantity"`
+	AdjustedQuantity       pgtype.Numeric     `json:"adjusted_quantity"`
 	CalculatedCost         pgtype.Numeric     `json:"calculated_cost"`
 }
 
@@ -482,7 +482,7 @@ SELECT
     cm.code as component_code,
     b.quantity,
     b.scrap_percentage,
-    (b.quantity * (1 + (b.scrap_percentage / 100))) as adjusted_quantity,
+    CAST(b.quantity * (1 + (b.scrap_percentage / 100)) AS DECIMAL(15,4)) as adjusted_quantity,
     cm.unit_price as unit_price,
     COALESCE(b.estimated_cost, b.quantity * (1 + (b.scrap_percentage / 100)) * COALESCE(cm.unit_price, 0)) as total_cost,
     mu.abbreviation as unit,
@@ -503,7 +503,7 @@ type GetBOMCostBreakdownRow struct {
 	ComponentCode       pgtype.Text    `json:"component_code"`
 	Quantity            pgtype.Numeric `json:"quantity"`
 	ScrapPercentage     pgtype.Numeric `json:"scrap_percentage"`
-	AdjustedQuantity    int32          `json:"adjusted_quantity"`
+	AdjustedQuantity    pgtype.Numeric `json:"adjusted_quantity"`
 	UnitPrice           pgtype.Numeric `json:"unit_price"`
 	TotalCost           pgtype.Numeric `json:"total_cost"`
 	Unit                pgtype.Text    `json:"unit"`
@@ -971,7 +971,7 @@ SELECT
     s.name as supplier_name,
     alt.name as alternate_component_name,
     alt.code as alternate_component_code,
-    (b.quantity * (1 + (b.scrap_percentage / 100))) as adjusted_quantity
+    CAST(b.quantity * (1 + (b.scrap_percentage / 100)) AS DECIMAL(15,4)) as adjusted_quantity
 FROM bills_of_materials b
 LEFT JOIN materials cm ON b.component_material_id = cm.id
 LEFT JOIN measure_units mu ON b.unit_measure_id = mu.id
@@ -1016,7 +1016,7 @@ type GetBillOfMaterialsByFinishedMaterialRow struct {
 	SupplierName           pgtype.Text        `json:"supplier_name"`
 	AlternateComponentName pgtype.Text        `json:"alternate_component_name"`
 	AlternateComponentCode pgtype.Text        `json:"alternate_component_code"`
-	AdjustedQuantity       int32              `json:"adjusted_quantity"`
+	AdjustedQuantity       pgtype.Numeric     `json:"adjusted_quantity"`
 }
 
 func (q *Queries) GetBillOfMaterialsByFinishedMaterial(ctx context.Context, finishedMaterialID pgtype.Int4) ([]GetBillOfMaterialsByFinishedMaterialRow, error) {
@@ -1149,7 +1149,7 @@ SELECT
     mu.name as unit_name,
     mu.abbreviation as unit_abbreviation,
     s.name as supplier_name,
-    (b.quantity * (1 + (b.scrap_percentage / 100))) as adjusted_quantity
+    CAST(b.quantity * (1 + (b.scrap_percentage / 100)) AS DECIMAL(15,4)) as adjusted_quantity
 FROM bills_of_materials b
 LEFT JOIN materials fm ON b.finished_material_id = fm.id
 LEFT JOIN materials cm ON b.component_material_id = cm.id
@@ -1199,7 +1199,7 @@ type ListBillsOfMaterialsRow struct {
 	UnitName              pgtype.Text        `json:"unit_name"`
 	UnitAbbreviation      pgtype.Text        `json:"unit_abbreviation"`
 	SupplierName          pgtype.Text        `json:"supplier_name"`
-	AdjustedQuantity      int32              `json:"adjusted_quantity"`
+	AdjustedQuantity      pgtype.Numeric     `json:"adjusted_quantity"`
 }
 
 func (q *Queries) ListBillsOfMaterials(ctx context.Context, arg ListBillsOfMaterialsParams) ([]ListBillsOfMaterialsRow, error) {
@@ -1272,7 +1272,7 @@ SELECT
     mu.name as unit_name,
     mu.abbreviation as unit_abbreviation,
     s.name as supplier_name,
-    (b.quantity * (1 + (b.scrap_percentage / 100))) as adjusted_quantity
+    CAST(b.quantity * (1 + (b.scrap_percentage / 100)) AS DECIMAL(15,4)) as adjusted_quantity
 FROM bills_of_materials b
 LEFT JOIN materials fm ON b.finished_material_id = fm.id
 LEFT JOIN materials cm ON b.component_material_id = cm.id
@@ -1329,7 +1329,7 @@ type SearchBillsOfMaterialsRow struct {
 	UnitName              pgtype.Text        `json:"unit_name"`
 	UnitAbbreviation      pgtype.Text        `json:"unit_abbreviation"`
 	SupplierName          pgtype.Text        `json:"supplier_name"`
-	AdjustedQuantity      int32              `json:"adjusted_quantity"`
+	AdjustedQuantity      pgtype.Numeric     `json:"adjusted_quantity"`
 }
 
 func (q *Queries) SearchBillsOfMaterials(ctx context.Context, arg SearchBillsOfMaterialsParams) ([]SearchBillsOfMaterialsRow, error) {

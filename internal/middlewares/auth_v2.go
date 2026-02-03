@@ -189,8 +189,15 @@ func updateSessionActivity(ctx context.Context, c cache.Cache, keyPrefix, sessio
 	if err != nil {
 		return err
 	}
+
+	// Calculate remaining TTL from ExpiresAt
+	ttl := time.Until(session.ExpiresAt)
+	if ttl < 0 {
+		ttl = 0 // Session already expired
+	}
+
 	session.LastAccessAt = time.Now()
-	return saveSession(ctx, c, keyPrefix, sessionID, session, 0) // 0 = keep existing TTL
+	return saveSession(ctx, c, keyPrefix, sessionID, session, ttl)
 }
 
 // getUserRolesPermissions retrieves cached roles and permissions
@@ -681,11 +688,11 @@ func SessionAuth(config *SessionConfig) func(next http.Handler) http.Handler {
 			// Calculate risk score based on UA and IP changes
 			riskLevel := assessSessionRisk(sessionData, currentUserAgent, currentIP, config.Logger)
 
-			// Handle based on risk level
+			// Handle based on risk level - only log warnings, never revoke
 			switch riskLevel {
 			case RiskHigh:
-				// High risk: Revoke session immediately
-				config.Logger.Warn("High-risk session detected - revoking session",
+				// High risk: Log warning only (no session revocation)
+				config.Logger.Warn("High-risk session activity detected",
 					"user_id", sessionData.UserID,
 					"reason", "major_ua_and_ip_change",
 					"original_ua", normalizeUserAgent(sessionData.UserAgent),
@@ -693,16 +700,10 @@ func SessionAuth(config *SessionConfig) func(next http.Handler) http.Handler {
 					"original_ip", sessionData.IPAddress,
 					"current_ip", currentIP,
 				)
-
-				if err := deleteSession(ctx, config.Cache, config.SessionKeyPrefix, sessionToken); err != nil {
-					config.Logger.Error("Failed to delete high-risk session", "error", err, "user_id", sessionData.UserID)
-				}
-
-				config.ErrorHandler(w, r, fmt.Errorf("session security violation - please login again"))
-				return
+				// Continue - allow access but logged for security monitoring
 
 			case RiskMedium:
-				// Medium risk: Log warning but allow (soft validation)
+				// Medium risk: Log warning but allow
 				config.Logger.Warn("Medium-risk session activity detected",
 					"user_id", sessionData.UserID,
 					"reason", "ua_or_ip_change",

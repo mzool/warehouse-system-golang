@@ -91,12 +91,19 @@ func ParsePagination(r *http.Request, config *PaginationConfig) *PaginationParam
 	}
 
 	// Parse limit (page size)
+	// Accept both "limit" and "per_page" for compatibility
 	limit := config.DefaultPageSize
 	if limitStr := query.Get("limit"); limitStr != "" {
 		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
 			limit = l
 		} else {
 			config.Logger.Debug("Invalid limit parameter", "value", limitStr)
+		}
+	} else if perPageStr := query.Get("per_page"); perPageStr != "" {
+		if l, err := strconv.Atoi(perPageStr); err == nil && l > 0 {
+			limit = l
+		} else {
+			config.Logger.Debug("Invalid per_page parameter", "value", perPageStr)
 		}
 	}
 

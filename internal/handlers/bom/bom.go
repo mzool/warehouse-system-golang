@@ -301,8 +301,102 @@ func (bh *BomHandler) ListBillsOfMaterials(w http.ResponseWriter, r *http.Reques
 	pagination.Total = total
 	totalPages := (total + int64(pagination.Limit) - 1) / int64(pagination.Limit)
 
+	// Group BOMs by finished material
+	type BOMComponent struct {
+		ID                    int32              `json:"id"`
+		ComponentMaterialID   int32              `json:"component_material_id"`
+		ComponentMaterialName pgtype.Text        `json:"component_material_name"`
+		ComponentMaterialCode pgtype.Text        `json:"component_material_code"`
+		Quantity              pgtype.Numeric     `json:"quantity"`
+		UnitMeasureID         pgtype.Int4        `json:"unit_measure_id"`
+		UnitName              pgtype.Text        `json:"unit_name"`
+		UnitAbbreviation      pgtype.Text        `json:"unit_abbreviation"`
+		ScrapPercentage       pgtype.Numeric     `json:"scrap_percentage"`
+		FixedQuantity         pgtype.Bool        `json:"fixed_quantity"`
+		IsOptional            pgtype.Bool        `json:"is_optional"`
+		Priority              pgtype.Int4        `json:"priority"`
+		ReferenceDesignator   pgtype.Text        `json:"reference_designator"`
+		Notes                 pgtype.Text        `json:"notes"`
+		EffectiveDate         pgtype.Date        `json:"effective_date"`
+		ExpiryDate            pgtype.Date        `json:"expiry_date"`
+		Version               pgtype.Text        `json:"version"`
+		OperationSequence     pgtype.Int4        `json:"operation_sequence"`
+		EstimatedCost         pgtype.Numeric     `json:"estimated_cost"`
+		ActualCost            pgtype.Numeric     `json:"actual_cost"`
+		LeadTimeDays          pgtype.Int4        `json:"lead_time_days"`
+		SupplierID            pgtype.Int4        `json:"supplier_id"`
+		AlternateComponentID  pgtype.Int4        `json:"alternate_component_id"`
+		IsActive              pgtype.Bool        `json:"is_active"`
+		Archived              pgtype.Bool        `json:"archived"`
+		ComponentUnitPrice    pgtype.Numeric     `json:"component_unit_price"`
+		AdjustedQuantity      pgtype.Numeric     `json:"adjusted_quantity"`
+		Meta                  json.RawMessage    `json:"meta"`
+		CreatedAt             pgtype.Timestamptz `json:"created_at"`
+		UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+	}
+
+	type GroupedBOM struct {
+		FinishedMaterialID   int32          `json:"finished_material_id"`
+		FinishedMaterialName pgtype.Text    `json:"finished_material_name"`
+		FinishedMaterialCode pgtype.Text    `json:"finished_material_code"`
+		Components           []BOMComponent `json:"components"`
+	}
+
+	// Map to group by finished material
+	bomMap := make(map[int32]*GroupedBOM)
+	for _, bom := range boms {
+		finishedID := bom.FinishedMaterialID.Int32
+		if _, exists := bomMap[finishedID]; !exists {
+			bomMap[finishedID] = &GroupedBOM{
+				FinishedMaterialID:   finishedID,
+				FinishedMaterialName: bom.FinishedMaterialName,
+				FinishedMaterialCode: bom.FinishedMaterialCode,
+				Components:           []BOMComponent{},
+			}
+		}
+
+		bomMap[finishedID].Components = append(bomMap[finishedID].Components, BOMComponent{
+			ID:                    bom.ID,
+			ComponentMaterialID:   bom.ComponentMaterialID.Int32,
+			ComponentMaterialName: bom.ComponentMaterialName,
+			ComponentMaterialCode: bom.ComponentMaterialCode,
+			Quantity:              bom.Quantity,
+			UnitMeasureID:         bom.UnitMeasureID,
+			UnitName:              bom.UnitName,
+			UnitAbbreviation:      bom.UnitAbbreviation,
+			ScrapPercentage:       bom.ScrapPercentage,
+			FixedQuantity:         bom.FixedQuantity,
+			IsOptional:            bom.IsOptional,
+			Priority:              bom.Priority,
+			ReferenceDesignator:   bom.ReferenceDesignator,
+			Notes:                 bom.Notes,
+			EffectiveDate:         bom.EffectiveDate,
+			ExpiryDate:            bom.ExpiryDate,
+			Version:               bom.Version,
+			OperationSequence:     bom.OperationSequence,
+			EstimatedCost:         bom.EstimatedCost,
+			ActualCost:            bom.ActualCost,
+			LeadTimeDays:          bom.LeadTimeDays,
+			SupplierID:            bom.SupplierID,
+			AlternateComponentID:  bom.AlternateComponentID,
+			IsActive:              bom.IsActive,
+			Archived:              bom.Archived,
+			ComponentUnitPrice:    bom.ComponentUnitPrice,
+			AdjustedQuantity:      bom.AdjustedQuantity,
+			Meta:                  bom.Meta,
+			CreatedAt:             bom.CreatedAt,
+			UpdatedAt:             bom.UpdatedAt,
+		})
+	}
+
+	// Convert map to array
+	groupedBOMs := make([]GroupedBOM, 0, len(bomMap))
+	for _, grouped := range bomMap {
+		groupedBOMs = append(groupedBOMs, *grouped)
+	}
+
 	config.RespondJSON(w, http.StatusOK, map[string]any{
-		"boms": boms,
+		"boms": groupedBOMs,
 		"pagination": map[string]any{
 			"page":        pagination.Page,
 			"limit":       pagination.Limit,

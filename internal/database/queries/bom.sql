@@ -54,7 +54,7 @@ SELECT
     s.name as supplier_name,
     alt.name as alternate_component_name,
     alt.code as alternate_component_code,
-    (b.quantity * (1 + (b.scrap_percentage / 100))) as adjusted_quantity
+    CAST(b.quantity * (1 + (b.scrap_percentage / 100)) AS DECIMAL(15,4)) as adjusted_quantity
 FROM bills_of_materials b
 LEFT JOIN materials cm ON b.component_material_id = cm.id
 LEFT JOIN measure_units mu ON b.unit_measure_id = mu.id
@@ -138,7 +138,7 @@ SELECT
     mu.name as unit_name,
     mu.abbreviation as unit_abbreviation,
     s.name as supplier_name,
-    (b.quantity * (1 + (b.scrap_percentage / 100))) as adjusted_quantity
+    CAST(b.quantity * (1 + (b.scrap_percentage / 100)) AS DECIMAL(15,4)) as adjusted_quantity
 FROM bills_of_materials b
 LEFT JOIN materials fm ON b.finished_material_id = fm.id
 LEFT JOIN materials cm ON b.component_material_id = cm.id
@@ -168,7 +168,7 @@ SELECT
     mu.name as unit_name,
     mu.abbreviation as unit_abbreviation,
     s.name as supplier_name,
-    (b.quantity * (1 + (b.scrap_percentage / 100))) as adjusted_quantity
+    CAST(b.quantity * (1 + (b.scrap_percentage / 100)) AS DECIMAL(15,4)) as adjusted_quantity
 FROM bills_of_materials b
 LEFT JOIN materials fm ON b.finished_material_id = fm.id
 LEFT JOIN materials cm ON b.component_material_id = cm.id
@@ -274,7 +274,7 @@ SELECT
     mu.abbreviation as unit_abbreviation,
     s.name as supplier_name,
     alt.name as alternate_component_name,
-    (b.quantity * (1 + (b.scrap_percentage / 100))) as adjusted_quantity,
+    CAST(b.quantity * (1 + (b.scrap_percentage / 100)) AS DECIMAL(15,4)) as adjusted_quantity,
     COALESCE(b.estimated_cost, b.quantity * (1 + (b.scrap_percentage / 100)) * COALESCE(cm.unit_price, 0)) as calculated_cost
 FROM bills_of_materials b
 LEFT JOIN materials cm ON b.component_material_id = cm.id
@@ -295,7 +295,7 @@ SELECT
     cm.code as component_code,
     b.quantity,
     b.scrap_percentage,
-    (b.quantity * (1 + (b.scrap_percentage / 100))) as adjusted_quantity,
+    CAST(b.quantity * (1 + (b.scrap_percentage / 100)) AS DECIMAL(15,4)) as adjusted_quantity,
     cm.unit_price as unit_price,
     COALESCE(b.estimated_cost, b.quantity * (1 + (b.scrap_percentage / 100)) * COALESCE(cm.unit_price, 0)) as total_cost,
     mu.abbreviation as unit,

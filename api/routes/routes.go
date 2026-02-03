@@ -9,10 +9,13 @@ import (
 	"warehouse_system/internal/handlers/bom"
 	"warehouse_system/internal/handlers/categories"
 	"warehouse_system/internal/handlers/customers"
+	"warehouse_system/internal/handlers/laboratory"
 	"warehouse_system/internal/handlers/materials"
 	"warehouse_system/internal/handlers/pos"
+	"warehouse_system/internal/handlers/quality"
 	"warehouse_system/internal/handlers/sales"
 	"warehouse_system/internal/handlers/suppliers"
+	"warehouse_system/internal/handlers/transactions"
 	"warehouse_system/internal/handlers/units"
 	"warehouse_system/internal/handlers/users"
 	"warehouse_system/internal/handlers/warehouses"
@@ -61,6 +64,12 @@ func ApiRoutes(r *router.RouterImpl, db *pgxpool.Pool, q *db.Queries, logger *sl
 	salesHandler := sales.NewSalesHandler(h)
 	// bill of materials handler
 	bomHandler := bom.NewBomHandler(h)
+	// stock transactions handler
+	transactionsHandler := transactions.NewTransactionHandler(h)
+	// quality handler
+	qualityHandler := quality.NewQualityHandler(h)
+	// laboratory handler
+	labHandler := laboratory.NewLaboratoryHandler(h)
 
 	// Authentication routes
 	r.Register(&router.Route{
@@ -2525,4 +2534,1712 @@ func ApiRoutes(r *router.RouterImpl, db *pgxpool.Pool, q *db.Queries, logger *sl
 			},
 		},
 	})
+
+	// ______________________________Stock Transactions_______________________________________________
+
+	// Download Opening Stock Template
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/transactions/opening-stock/template",
+		HandlerFunc: transactionsHandler.DownloadOpeningStockTemplate,
+		Category:    "transactions",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body":   "Excel file download (opening_stock_template.xlsx)",
+			},
+			"error": map[string]any{
+				"401": map[string]string{"error": "Unauthorized"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// Import Opening Stock from Excel
+	r.Register(&router.Route{
+		Method:      "POST",
+		Path:        "/transactions/opening-stock/import",
+		HandlerFunc: transactionsHandler.ImportOpeningStockFromExcel,
+		Category:    "transactions",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			FormData: map[string]string{
+				"file": "multipart/form-data - Excel file (.xlsx) with opening stock data",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 201,
+				"body": map[string]any{
+					"success_count": "int - Number of entries imported successfully",
+					"failed_count":  "int - Number of failed entries",
+					"total_rows":    "int - Total rows processed",
+				},
+			},
+			"error": map[string]any{
+				"400": map[string]any{
+					"success_count": 0,
+					"failed_count":  "int",
+					"total_rows":    "int",
+					"failed": []map[string]any{
+						{
+							"row":            "int - Row number with error",
+							"material_code":  "string",
+							"warehouse_code": "string",
+							"reason":         "string - Error description",
+						},
+					},
+				},
+				"401": map[string]string{"error": "Unauthorized"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// Opening Stock
+	r.Register(&router.Route{
+		Method:      "POST",
+		Path:        "/transactions/opening-stock",
+		HandlerFunc: transactionsHandler.OpeningStock,
+		Category:    "transactions",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			Body: map[string]string{
+				"material_id":      "int32 (required) - Material ID",
+				"warehouse_id":     "int32 (required) - Warehouse ID",
+				"quantity":         "float64 (required) - Quantity",
+				"unit_price":       "float64 (required) - Unit price",
+				"manufacture_date": "string (optional) - Format: YYYY-MM-DD",
+				"expiry_date":      "string (optional) - Format: YYYY-MM-DD",
+				"notes":            "string (optional) - Additional notes",
+				"meta":             "object (optional) - Additional metadata",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 201,
+				"body": map[string]any{
+					"success":     true,
+					"message":     "Opening stock recorded successfully",
+					"movement_id": 1,
+					"batch_ids":   []int32{1},
+				},
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Quantity must be positive | Invalid request body"},
+				"401": map[string]string{"error": "Unauthorized"},
+				"409": map[string]string{"error": "Opening stock already exists for this material in current year"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// Purchase Receipt
+	r.Register(&router.Route{
+		Method:      "POST",
+		Path:        "/transactions/purchase-receipt",
+		HandlerFunc: transactionsHandler.PurchaseReceipt,
+		Category:    "transactions",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			Body: map[string]string{
+				"material_id":       "int32 (required) - Material ID",
+				"warehouse_id":      "int32 (required) - Warehouse ID",
+				"supplier_id":       "int32 (optional) - Supplier ID",
+				"quantity":          "float64 (required) - Quantity",
+				"unit_price":        "float64 (required) - Unit price",
+				"purchase_order_id": "int32 (optional) - Purchase order ID",
+				"manufacture_date":  "string (optional) - Format: YYYY-MM-DD",
+				"expiry_date":       "string (optional) - Format: YYYY-MM-DD",
+				"notes":             "string (optional) - Additional notes",
+				"meta":              "object (optional) - Additional metadata",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 201,
+				"body": map[string]any{
+					"success":     true,
+					"message":     "Purchase receipt recorded successfully",
+					"movement_id": 2,
+					"batch_ids":   []int32{2},
+				},
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Invalid request body"},
+				"401": map[string]string{"error": "Unauthorized"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// Sale
+	r.Register(&router.Route{
+		Method:      "POST",
+		Path:        "/transactions/sale",
+		HandlerFunc: transactionsHandler.Sale,
+		Category:    "transactions",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			Body: map[string]string{
+				"sales_order_id": "int32 (required) - Sales order ID",
+				"warehouse_id":   "int32 (required) - Warehouse ID",
+				"material_id":    "int32 (required) - Material ID",
+				"quantity":       "float64 (required) - Quantity",
+				"use_manual":     "bool (optional, default: false) - Manual batch selection",
+				"batches":        "array (optional) - Array of {batch_id, quantity} for manual selection",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 201,
+				"body": map[string]any{
+					"success":     true,
+					"message":     "Sale recorded successfully",
+					"movement_id": 3,
+					"batch_ids":   []int32{1, 2},
+				},
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Insufficient stock | Invalid batch allocations"},
+				"401": map[string]string{"error": "Unauthorized"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// Customer Return
+	r.Register(&router.Route{
+		Method:      "POST",
+		Path:        "/transactions/customer-return",
+		HandlerFunc: transactionsHandler.CustomerReturn,
+		Category:    "transactions",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			Body: map[string]string{
+				"sales_order_id": "int32 (required) - Sales order ID",
+				"material_id":    "int32 (required) - Material ID",
+				"quantity":       "float64 (required) - Quantity",
+				"notes":          "string (optional) - Return notes",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 201,
+				"body": map[string]any{
+					"success":     true,
+					"message":     "Customer return recorded successfully",
+					"movement_id": 4,
+					"batch_ids":   []int32{5},
+				},
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Invalid request body"},
+				"401": map[string]string{"error": "Unauthorized"},
+				"404": map[string]string{"error": "Original sale not found"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// Transfer
+	r.Register(&router.Route{
+		Method:      "POST",
+		Path:        "/transactions/transfer",
+		HandlerFunc: transactionsHandler.Transfer,
+		Category:    "transactions",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			Body: map[string]string{
+				"material_id":       "int32 (required) - Material ID",
+				"from_warehouse_id": "int32 (required) - Source warehouse ID",
+				"to_warehouse_id":   "int32 (required) - Destination warehouse ID",
+				"quantity":          "float64 (required) - Quantity",
+				"use_manual":        "bool (optional, default: false) - Manual batch selection",
+				"batches":           "array (optional) - Array of {batch_id, quantity} for manual selection",
+				"notes":             "string (optional) - Transfer notes",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 201,
+				"body": map[string]any{
+					"success":     true,
+					"message":     "Transfer completed successfully",
+					"movement_id": 5,
+					"batch_ids":   []int32{6, 7},
+				},
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Source and destination warehouses must be different | Insufficient stock"},
+				"401": map[string]string{"error": "Unauthorized"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// Scrap
+	r.Register(&router.Route{
+		Method:      "POST",
+		Path:        "/transactions/scrap",
+		HandlerFunc: transactionsHandler.Scrap,
+		Category:    "transactions",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			Body: map[string]string{
+				"material_id":  "int32 (required) - Material ID",
+				"warehouse_id": "int32 (required) - Warehouse ID",
+				"quantity":     "float64 (required) - Quantity",
+				"reason":       "string (required) - Reason for scrap",
+				"use_manual":   "bool (optional, default: false) - Manual batch selection",
+				"batches":      "array (optional) - Array of {batch_id, quantity} for manual selection",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 201,
+				"body": map[string]any{
+					"success":     true,
+					"message":     "Scrap recorded successfully",
+					"movement_id": 6,
+					"batch_ids":   []int32{1},
+				},
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Reason is required for scrap | Insufficient stock"},
+				"401": map[string]string{"error": "Unauthorized"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// Adjustment
+	r.Register(&router.Route{
+		Method:      "POST",
+		Path:        "/transactions/adjustment",
+		HandlerFunc: transactionsHandler.Adjustment,
+		Category:    "transactions",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			Body: map[string]string{
+				"material_id":  "int32 (required) - Material ID",
+				"warehouse_id": "int32 (required) - Warehouse ID",
+				"quantity":     "float64 (required) - Quantity",
+				"direction":    "string (required) - 'IN' or 'OUT'",
+				"reason":       "string (required) - Reason for adjustment",
+				"unit_price":   "float64 (optional) - Unit price for adjustment IN",
+				"use_manual":   "bool (optional, default: false) - Manual batch selection for OUT",
+				"batches":      "array (optional) - Array of {batch_id, quantity} for manual selection",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 201,
+				"body": map[string]any{
+					"success":     true,
+					"message":     "Adjustment IN recorded successfully",
+					"movement_id": 7,
+					"batch_ids":   []int32{8},
+				},
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Reason is required | Direction must be 'IN' or 'OUT'"},
+				"401": map[string]string{"error": "Unauthorized"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// Get Stock Level
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/transactions/stock-level",
+		HandlerFunc: transactionsHandler.GetStockLevel,
+		Category:    "transactions",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			QueryParameters: map[string]string{
+				"material_id":  "int32 (required) - Material ID",
+				"warehouse_id": "int32 (required) - Warehouse ID",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body": map[string]any{
+					"total_quantity": 100.50,
+					"batch_count":    5,
+				},
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "material_id and warehouse_id are required"},
+				"401": map[string]string{"error": "Unauthorized"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// Get Stock Levels by Warehouse
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/transactions/stock-levels/warehouse",
+		HandlerFunc: transactionsHandler.GetStockLevelsByWarehouse,
+		Category:    "transactions",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body":   "Array of stock levels grouped by warehouse",
+			},
+			"error": map[string]any{
+				"401": map[string]string{"error": "Unauthorized"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// Get Stock Levels by Material
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/transactions/stock-levels/material",
+		HandlerFunc: transactionsHandler.GetStockLevelsByMaterial,
+		Category:    "transactions",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			QueryParameters: map[string]string{
+				"material_id": "int32 (required) - Material ID",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body":   "Array of stock levels across all warehouses for the material",
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "material_id is required"},
+				"401": map[string]string{"error": "Unauthorized"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// Get Comprehensive Material Stock (with batches)
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/transactions/stock/material",
+		HandlerFunc: transactionsHandler.GetMaterialStock,
+		Category:    "transactions",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			QueryParameters: map[string]string{
+				"material_id": "int32 (required) - Material ID",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body":   "Comprehensive stock info with all batches per warehouse",
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "material_id is required"},
+				"401": map[string]string{"error": "Unauthorized"},
+				"404": map[string]string{"error": "Material not found or has no stock"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// Get Available Batches
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/transactions/batches/available",
+		HandlerFunc: transactionsHandler.GetAvailableBatches,
+		Category:    "transactions",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			QueryParameters: map[string]string{
+				"material_id":  "int32 (required) - Material ID",
+				"warehouse_id": "int32 (required) - Warehouse ID",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body":   "Array of available batches with details",
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "material_id and warehouse_id are required"},
+				"401": map[string]string{"error": "Unauthorized"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// Get Movement History
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/transactions/movements/history",
+		HandlerFunc: transactionsHandler.GetMovementHistory,
+		Category:    "transactions",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			QueryParameters: map[string]string{
+				"material_id": "int32 (required) - Material ID",
+				"limit":       "int (optional, default: 50, max: 100) - Items per page",
+				"offset":      "int (optional, default: 0) - Offset for pagination",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body":   "Array of stock movements for the material",
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "material_id is required"},
+				"401": map[string]string{"error": "Unauthorized"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// Get Warehouse Movements
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/transactions/movements/warehouse",
+		HandlerFunc: transactionsHandler.GetWarehouseMovements,
+		Category:    "transactions",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			QueryParameters: map[string]string{
+				"warehouse_id": "int32 (required) - Warehouse ID",
+				"limit":        "int (optional, default: 50, max: 100) - Items per page",
+				"offset":       "int (optional, default: 0) - Offset for pagination",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body":   "Array of stock movements for the warehouse",
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "warehouse_id is required"},
+				"401": map[string]string{"error": "Unauthorized"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// Get Movement by ID
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/transactions/movements/{id}",
+		HandlerFunc: transactionsHandler.GetMovementByID,
+		Category:    "transactions",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			QueryParameters: map[string]string{
+				"id": "int32 (required) - Movement ID",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 200,
+				"body":   "Stock movement details",
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "id is required"},
+				"401": map[string]string{"error": "Unauthorized"},
+				"404": map[string]string{"error": "Movement not found"},
+				"500": map[string]string{"error": "Internal server error"},
+			},
+		},
+	})
+
+	// ============================================================================
+	// QUALITY MANAGEMENT SYSTEM ROUTES
+	// ============================================================================
+
+	// ============================
+	// Quality Inspection Criteria
+	// ============================
+
+	r.Register(&router.Route{
+		Method:      "POST",
+		Path:        "/quality/criteria",
+		HandlerFunc: qualityHandler.CreateInspectionCriteria,
+		Category:    "quality",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			Body: map[string]string{
+				"name":          "string (required) - Criteria name",
+				"description":   "string (optional) - Criteria description",
+				"criteria_type": "string (required) - visual, measurement, functional, document",
+				"specification": "string (optional) - Expected value or range",
+				"unit_id":       "int32 (optional) - Measurement unit ID",
+				"tolerance_min": "float64 (optional) - Minimum acceptable value",
+				"tolerance_max": "float64 (optional) - Maximum acceptable value",
+				"is_critical":   "boolean (optional, default: false) - Critical to quality",
+				"is_active":     "boolean (optional, default: true) - Is active",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{
+				"status": 201,
+				"body":   "Quality inspection criteria object",
+			},
+			"error": map[string]any{
+				"400": map[string]string{"error": "Invalid request payload | Validation error"},
+				"401": map[string]string{"error": "Unauthorized"},
+				"500": map[string]string{"error": "Failed to create inspection criteria"},
+			},
+		},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/quality/criteria/{id}",
+		HandlerFunc: qualityHandler.GetInspectionCriteria,
+		Category:    "quality",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			PathParameters: map[string]string{
+				"id": "int32 (required) - Criteria ID",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{"status": 200, "body": "Criteria object"},
+			"error":   map[string]any{"404": map[string]string{"error": "Criteria not found"}},
+		},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/quality/criteria",
+		HandlerFunc: qualityHandler.ListInspectionCriteria,
+		Category:    "quality",
+		Input:       &router.RouteInput{RequiredAuth: true},
+		Response:    map[string]any{"success": map[string]any{"status": 200, "body": "Array of criteria"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/quality/criteria/search",
+		HandlerFunc: qualityHandler.SearchInspectionCriteria,
+		Category:    "quality",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			QueryParameters: map[string]string{
+				"q":      "string (optional) - Search query",
+				"limit":  "int (optional, default: 20)",
+				"offset": "int (optional, default: 0)",
+			},
+		},
+	})
+
+	r.Register(&router.Route{
+		Method:      "PUT",
+		Path:        "/quality/criteria/{id}",
+		HandlerFunc: qualityHandler.UpdateInspectionCriteria,
+		Category:    "quality",
+		Input: &router.RouteInput{
+			RequiredAuth:   true,
+			PathParameters: map[string]string{"id": "int32 (required)"},
+			Body:           map[string]string{"All fields optional": "Only provided fields updated"},
+		},
+	})
+
+	r.Register(&router.Route{
+		Method:      "DELETE",
+		Path:        "/quality/criteria/{id}",
+		HandlerFunc: qualityHandler.DeleteInspectionCriteria,
+		Category:    "quality",
+		Input:       &router.RouteInput{RequiredAuth: true, PathParameters: map[string]string{"id": "int32"}},
+	})
+
+	// ============================
+	// Quality Inspections
+	// ============================
+
+	r.Register(&router.Route{
+		Method:      "POST",
+		Path:        "/quality/inspections",
+		HandlerFunc: qualityHandler.CreateQualityInspection,
+		Category:    "quality",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			Body: map[string]string{
+				"inspection_type":   "string (required) - incoming, in_process, final, periodic, audit, customer_return",
+				"inspection_status": "string (optional) - pending, in_progress, passed, failed, partial, on_hold, cancelled",
+				"material_id":       "int32 (required) - Material being inspected",
+				"batch_number":      "string (optional) - Batch number",
+				"lot_number":        "string (optional) - Lot number",
+				"quantity":          "float64 (required) - Quantity inspected",
+				"unit_id":           "int32 (optional) - Unit ID",
+				"purchase_order_id": "int32 (optional) - Related PO",
+				"supplier_id":       "int32 (optional) - Supplier ID",
+				"inspection_date":   "timestamp (optional) - Inspection date",
+				"inspector_id":      "int32 (optional) - Inspector user ID",
+				"notes":             "string (optional) - Notes",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{"status": 201, "body": "Inspection object with auto-generated inspection_number"},
+			"error":   map[string]any{"400": map[string]string{"error": "Validation error"}, "500": map[string]string{"error": "Failed to create"}},
+		},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/quality/inspections/{id}",
+		HandlerFunc: qualityHandler.GetQualityInspection,
+		Category:    "quality",
+		Input:       &router.RouteInput{RequiredAuth: true, PathParameters: map[string]string{"id": "int32"}},
+		Response:    map[string]any{"success": map[string]any{"status": 200, "body": "Inspection with material, supplier, inspector names"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/quality/inspections/by-number/{number}",
+		HandlerFunc: qualityHandler.GetQualityInspectionByNumber,
+		Category:    "quality",
+		Input:       &router.RouteInput{RequiredAuth: true, PathParameters: map[string]string{"number": "string - e.g., QI-2026-0001"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/quality/inspections",
+		HandlerFunc: qualityHandler.ListQualityInspections,
+		Category:    "quality",
+		Input: &router.RouteInput{
+			RequiredAuth:    true,
+			QueryParameters: map[string]string{"limit": "int (default: 20)", "offset": "int (default: 0)"},
+		},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/quality/inspections/pending",
+		HandlerFunc: qualityHandler.ListPendingInspections,
+		Category:    "quality",
+		Input:       &router.RouteInput{RequiredAuth: true},
+		Response:    map[string]any{"success": map[string]any{"body": "Inspections with pending or in_progress status"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/quality/inspections/status/{status}",
+		HandlerFunc: qualityHandler.ListQualityInspectionsByStatus,
+		Category:    "quality",
+		Input:       &router.RouteInput{RequiredAuth: true, PathParameters: map[string]string{"status": "string"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/quality/inspections/material/{material_id}",
+		HandlerFunc: qualityHandler.ListQualityInspectionsByMaterial,
+		Category:    "quality",
+		Input:       &router.RouteInput{RequiredAuth: true, PathParameters: map[string]string{"material_id": "int32"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/quality/inspections/batch/{batch}",
+		HandlerFunc: qualityHandler.ListQualityInspectionsByBatch,
+		Category:    "quality",
+		Input:       &router.RouteInput{RequiredAuth: true, PathParameters: map[string]string{"batch": "string"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "PUT",
+		Path:        "/quality/inspections/{id}",
+		HandlerFunc: qualityHandler.UpdateQualityInspection,
+		Category:    "quality",
+		Input: &router.RouteInput{
+			RequiredAuth:   true,
+			PathParameters: map[string]string{"id": "int32"},
+			Body: map[string]string{
+				"inspection_status": "string (optional)",
+				"inspection_date":   "timestamp (optional)",
+				"inspector_id":      "int32 (optional)",
+				"quantity_passed":   "float64 (optional)",
+				"quantity_failed":   "float64 (optional)",
+				"final_decision":    "string (optional) - unrestricted, quarantine, blocked, rejected",
+				"decision_date":     "timestamp (optional)",
+			},
+		},
+	})
+
+	r.Register(&router.Route{
+		Method:      "DELETE",
+		Path:        "/quality/inspections/{id}",
+		HandlerFunc: qualityHandler.DeleteQualityInspection,
+		Category:    "quality",
+		Input:       &router.RouteInput{RequiredAuth: true, PathParameters: map[string]string{"id": "int32"}},
+	})
+
+	// ============================
+	// Inspection Results
+	// ============================
+
+	r.Register(&router.Route{
+		Method:      "POST",
+		Path:        "/quality/inspection-results",
+		HandlerFunc: qualityHandler.CreateInspectionResult,
+		Category:    "quality",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			Body: map[string]string{
+				"inspection_id":  "int32 (required)",
+				"criteria_id":    "int32 (optional)",
+				"criteria_name":  "string (required)",
+				"measured_value": "float64 (optional)",
+				"text_value":     "string (optional)",
+				"is_passed":      "boolean (optional)",
+				"sample_number":  "int32 (optional)",
+			},
+		},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/quality/inspection-results/by-inspection/{inspection_id}",
+		HandlerFunc: qualityHandler.ListInspectionResults,
+		Category:    "quality",
+		Input:       &router.RouteInput{RequiredAuth: true, PathParameters: map[string]string{"inspection_id": "int32"}},
+		Response:    map[string]any{"success": map[string]any{"body": "Array of inspection results with criteria details"}},
+	})
+
+	// ============================
+	// Non-Conformance Reports (NCR)
+	// ============================
+
+	r.Register(&router.Route{
+		Method:      "POST",
+		Path:        "/quality/ncr",
+		HandlerFunc: qualityHandler.CreateNCR,
+		Category:    "quality",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			Body: map[string]string{
+				"title":             "string (required) - NCR title",
+				"description":       "string (required) - Detailed description",
+				"ncr_type":          "string (required) - supplier, process, customer, audit, other",
+				"severity":          "string (required) - critical, major, minor, observation",
+				"status":            "string (optional) - open, investigating, action_required, in_progress, resolved, closed",
+				"material_id":       "int32 (optional)",
+				"batch_number":      "string (optional)",
+				"quantity_affected": "float64 (optional)",
+				"supplier_id":       "int32 (optional)",
+				"customer_id":       "int32 (optional)",
+				"inspection_id":     "int32 (optional)",
+			},
+		},
+		Response: map[string]any{
+			"success": map[string]any{"status": 201, "body": "NCR object with auto-generated ncr_number"},
+		},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/quality/ncr/{id}",
+		HandlerFunc: qualityHandler.GetNCR,
+		Category:    "quality",
+		Input:       &router.RouteInput{RequiredAuth: true, PathParameters: map[string]string{"id": "int32"}},
+		Response:    map[string]any{"success": map[string]any{"body": "NCR with material, supplier, customer, reporter names"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/quality/ncr/number/{number}",
+		HandlerFunc: qualityHandler.GetNCRByNumber,
+		Category:    "quality",
+		Input:       &router.RouteInput{RequiredAuth: true, PathParameters: map[string]string{"number": "string - e.g., NCR-2026-0001"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/quality/ncr",
+		HandlerFunc: qualityHandler.ListNCRs,
+		Category:    "quality",
+		Input:       &router.RouteInput{RequiredAuth: true, QueryParameters: map[string]string{"limit": "int", "offset": "int"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/quality/ncr/open",
+		HandlerFunc: qualityHandler.ListOpenNCRs,
+		Category:    "quality",
+		Input:       &router.RouteInput{RequiredAuth: true},
+		Response:    map[string]any{"success": map[string]any{"body": "Open NCRs sorted by severity"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/quality/ncr/overdue",
+		HandlerFunc: qualityHandler.ListOverdueNCRActions,
+		Category:    "quality",
+		Input:       &router.RouteInput{RequiredAuth: true},
+		Response:    map[string]any{"success": map[string]any{"body": "NCRs with past due action dates"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "PUT",
+		Path:        "/quality/ncr/{id}",
+		HandlerFunc: qualityHandler.UpdateNCR,
+		Category:    "quality",
+		Input: &router.RouteInput{
+			RequiredAuth:   true,
+			PathParameters: map[string]string{"id": "int32"},
+			Body: map[string]string{
+				"status":                "string (optional)",
+				"root_cause":            "string (optional)",
+				"corrective_action":     "string (optional)",
+				"preventive_action":     "string (optional)",
+				"action_assigned_to":    "int32 (optional)",
+				"action_due_date":       "date (optional)",
+				"action_completed_date": "date (optional)",
+				"disposition":           "string (optional) - rework, scrap, return_to_supplier, use_as_is, sort",
+				"cost_impact":           "float64 (optional)",
+			},
+		},
+	})
+
+	r.Register(&router.Route{
+		Method:      "DELETE",
+		Path:        "/quality/ncr/{id}",
+		HandlerFunc: qualityHandler.DeleteNCR,
+		Category:    "quality",
+		Input:       &router.RouteInput{RequiredAuth: true, PathParameters: map[string]string{"id": "int32"}},
+	})
+
+	// ============================
+	// Quality Holds
+	// ============================
+
+	r.Register(&router.Route{
+		Method:      "POST",
+		Path:        "/quality/holds",
+		HandlerFunc: qualityHandler.CreateQualityHold,
+		Category:    "quality",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			Body: map[string]string{
+				"material_id":           "int32 (required)",
+				"warehouse_id":          "int32 (optional)",
+				"batch_number":          "string (optional)",
+				"quantity":              "float64 (required)",
+				"quality_status":        "string (required) - unrestricted, quarantine, blocked, rejected",
+				"hold_reason":           "string (required)",
+				"inspection_id":         "int32 (optional)",
+				"ncr_id":                "int32 (optional)",
+				"expected_release_date": "date (optional)",
+			},
+		},
+		Response: map[string]any{"success": map[string]any{"status": 201, "body": "Hold object with auto-generated hold_number"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/quality/holds/{id}",
+		HandlerFunc: qualityHandler.GetQualityHold,
+		Category:    "quality",
+		Input:       &router.RouteInput{RequiredAuth: true, PathParameters: map[string]string{"id": "int32"}},
+		Response:    map[string]any{"success": map[string]any{"body": "Hold with material, warehouse, user names"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/quality/holds/by-number/{number}",
+		HandlerFunc: qualityHandler.GetQualityHoldByNumber,
+		Category:    "quality",
+		Input:       &router.RouteInput{RequiredAuth: true, PathParameters: map[string]string{"number": "string - e.g., QH-2026-0001"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/quality/holds",
+		HandlerFunc: qualityHandler.ListQualityHolds,
+		Category:    "quality",
+		Input:       &router.RouteInput{RequiredAuth: true, QueryParameters: map[string]string{"limit": "int", "offset": "int"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/quality/holds/active",
+		HandlerFunc: qualityHandler.ListActiveQualityHolds,
+		Category:    "quality",
+		Input:       &router.RouteInput{RequiredAuth: true},
+		Response:    map[string]any{"success": map[string]any{"body": "Non-released holds"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/quality/holds/material/{material_id}",
+		HandlerFunc: qualityHandler.ListQualityHoldsByMaterial,
+		Category:    "quality",
+		Input:       &router.RouteInput{RequiredAuth: true, PathParameters: map[string]string{"material_id": "int32"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/quality/holds/batch/{batch}",
+		HandlerFunc: qualityHandler.ListQualityHoldsByBatch,
+		Category:    "quality",
+		Input:       &router.RouteInput{RequiredAuth: true, PathParameters: map[string]string{"batch": "string"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "PUT",
+		Path:        "/quality/holds/{id}",
+		HandlerFunc: qualityHandler.UpdateQualityHold,
+		Category:    "quality",
+		Input: &router.RouteInput{
+			RequiredAuth:   true,
+			PathParameters: map[string]string{"id": "int32"},
+			Body:           map[string]string{"All fields optional": "quality_status, hold_reason, expected_release_date, etc."},
+		},
+	})
+
+	r.Register(&router.Route{
+		Method:      "POST",
+		Path:        "/quality/holds/release/{id}",
+		HandlerFunc: qualityHandler.ReleaseQualityHold,
+		Category:    "quality",
+		Input: &router.RouteInput{
+			RequiredAuth:   true,
+			PathParameters: map[string]string{"id": "int32"},
+			Body:           map[string]string{"released_by": "int32 (required)", "release_notes": "string (optional)"},
+		},
+		Response: map[string]any{"success": map[string]any{"body": "Released hold object"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "DELETE",
+		Path:        "/quality/holds/{id}",
+		HandlerFunc: qualityHandler.DeleteQualityHold,
+		Category:    "quality",
+		Input:       &router.RouteInput{RequiredAuth: true, PathParameters: map[string]string{"id": "int32"}},
+	})
+
+	// ============================
+	// Quality Dashboard & Statistics
+	// ============================
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/quality/dashboard/stats",
+		HandlerFunc: qualityHandler.GetQualityDashboardStats,
+		Category:    "quality",
+		Input:       &router.RouteInput{RequiredAuth: true},
+		Response: map[string]any{
+			"success": map[string]any{
+				"body": map[string]string{
+					"pending_inspections":     "int64",
+					"in_progress_inspections": "int64",
+					"active_holds":            "int64",
+					"open_ncrs":               "int64",
+					"overdue_ncrs":            "int64",
+				},
+			},
+		},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/quality/dashboard/trends",
+		HandlerFunc: qualityHandler.GetQualityInspectionTrends,
+		Category:    "quality",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			QueryParameters: map[string]string{
+				"start_date": "string (required) - Format: YYYY-MM-DD",
+				"end_date":   "string (required) - Format: YYYY-MM-DD",
+			},
+		},
+		Response: map[string]any{"success": map[string]any{"body": "Monthly aggregated inspection stats with pass rates"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/quality/dashboard/defective-materials",
+		HandlerFunc: qualityHandler.GetTopDefectiveMaterials,
+		Category:    "quality",
+		Input:       &router.RouteInput{RequiredAuth: true, QueryParameters: map[string]string{"limit": "int (default: 10)"}},
+		Response:    map[string]any{"success": map[string]any{"body": "Materials with highest failure rates"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/quality/materials/{material_id}/stats",
+		HandlerFunc: qualityHandler.GetMaterialInspectionStats,
+		Category:    "quality",
+		Input:       &router.RouteInput{RequiredAuth: true, PathParameters: map[string]string{"material_id": "int32"}},
+		Response:    map[string]any{"success": map[string]any{"body": "Total inspections, passed, failed, pass_rate for material"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/quality/inspections/count/{status}",
+		HandlerFunc: qualityHandler.CountInspectionsByStatus,
+		Category:    "quality",
+		Input:       &router.RouteInput{RequiredAuth: true, PathParameters: map[string]string{"status": "string"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/quality/ncr/count/{status}",
+		HandlerFunc: qualityHandler.CountNCRsByStatus,
+		Category:    "quality",
+		Input:       &router.RouteInput{RequiredAuth: true, PathParameters: map[string]string{"status": "string"}},
+	})
+
+	// ============================
+	// Laboratory System Routes
+	// ============================
+
+	// Lab Test Methods
+	// ============================
+
+	r.Register(&router.Route{
+		Method:      "POST",
+		Path:        "/laboratory/test-methods",
+		HandlerFunc: labHandler.CreateLabTestMethod,
+		Category:    "laboratory",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			Body: map[string]string{
+				"method_code":        "string (required)",
+				"method_name":        "string (required)",
+				"test_type":          "string (required) - PHYSICAL, CHEMICAL, MICROBIOLOGICAL, INSTRUMENTAL",
+				"description":        "string",
+				"procedure_ref":      "string",
+				"equipment_required": "[]string",
+				"sample_size":        "string",
+				"acceptance_limits":  "JSONB",
+				"effective_date":     "date",
+				"approval_date":      "date",
+				"approved_by":        "int32",
+				"status":             "string - ACTIVE, INACTIVE, OBSOLETE",
+			},
+		},
+		Response: map[string]any{"success": map[string]any{"body": "Created test method"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/laboratory/test-methods/{id}",
+		HandlerFunc: labHandler.GetLabTestMethod,
+		Category:    "laboratory",
+		Input:       &router.RouteInput{RequiredAuth: true, PathParameters: map[string]string{"id": "int32"}},
+		Response:    map[string]any{"success": map[string]any{"body": "Test method details"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/laboratory/test-methods/code/{code}",
+		HandlerFunc: labHandler.GetLabTestMethodByCode,
+		Category:    "laboratory",
+		Input:       &router.RouteInput{RequiredAuth: true, PathParameters: map[string]string{"code": "string"}},
+		Response:    map[string]any{"success": map[string]any{"body": "Test method by code"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/laboratory/test-methods",
+		HandlerFunc: labHandler.ListLabTestMethods,
+		Category:    "laboratory",
+		Input:       &router.RouteInput{RequiredAuth: true},
+		Response:    map[string]any{"success": map[string]any{"body": "All test methods"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/laboratory/test-methods/type/{type}",
+		HandlerFunc: labHandler.ListLabTestMethodsByType,
+		Category:    "laboratory",
+		Input:       &router.RouteInput{RequiredAuth: true, PathParameters: map[string]string{"type": "string"}},
+		Response:    map[string]any{"success": map[string]any{"body": "Test methods by type"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/laboratory/test-methods/search",
+		HandlerFunc: labHandler.SearchLabTestMethods,
+		Category:    "laboratory",
+		Input: &router.RouteInput{
+			RequiredAuth:    true,
+			QueryParameters: map[string]string{"q": "string (required)"},
+		},
+		Response: map[string]any{"success": map[string]any{"body": "Matching test methods"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "PUT",
+		Path:        "/laboratory/test-methods/{id}",
+		HandlerFunc: labHandler.UpdateLabTestMethod,
+		Category:    "laboratory",
+		Input: &router.RouteInput{
+			RequiredAuth:   true,
+			PathParameters: map[string]string{"id": "int32"},
+			Body: map[string]string{
+				"method_name":        "string",
+				"description":        "string",
+				"procedure_ref":      "string",
+				"equipment_required": "[]string",
+				"sample_size":        "string",
+				"acceptance_limits":  "JSONB",
+				"status":             "string",
+			},
+		},
+		Response: map[string]any{"success": map[string]any{"body": "Updated test method"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "DELETE",
+		Path:        "/laboratory/test-methods/{id}",
+		HandlerFunc: labHandler.DeleteLabTestMethod,
+		Category:    "laboratory",
+		Input:       &router.RouteInput{RequiredAuth: true, PathParameters: map[string]string{"id": "int32"}},
+		Response:    map[string]any{"success": map[string]any{"message": "Test method deleted successfully"}},
+	})
+
+	// Lab Equipment
+	// ============================
+
+	r.Register(&router.Route{
+		Method:      "POST",
+		Path:        "/laboratory/equipment",
+		HandlerFunc: labHandler.CreateLabEquipment,
+		Category:    "laboratory",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			Body: map[string]string{
+				"equipment_code":        "string (required)",
+				"equipment_name":        "string (required)",
+				"equipment_type":        "string (required)",
+				"manufacturer":          "string",
+				"model_number":          "string",
+				"serial_number":         "string",
+				"location":              "string",
+				"calibration_frequency": "string",
+				"last_calibration_date": "date",
+				"next_calibration_date": "date",
+				"last_maintenance_date": "date",
+				"next_maintenance_date": "date",
+				"qualification_status":  "string - QUALIFIED, NOT_QUALIFIED, PENDING",
+				"qualification_date":    "date",
+				"status":                "string - ACTIVE, INACTIVE, UNDER_MAINTENANCE, RETIRED",
+			},
+		},
+		Response: map[string]any{"success": map[string]any{"body": "Created equipment"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/laboratory/equipment/{id}",
+		HandlerFunc: labHandler.GetLabEquipment,
+		Category:    "laboratory",
+		Input:       &router.RouteInput{RequiredAuth: true, PathParameters: map[string]string{"id": "int32"}},
+		Response:    map[string]any{"success": map[string]any{"body": "Equipment details"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/laboratory/equipment/code/{code}",
+		HandlerFunc: labHandler.GetLabEquipmentByCode,
+		Category:    "laboratory",
+		Input:       &router.RouteInput{RequiredAuth: true, PathParameters: map[string]string{"code": "string"}},
+		Response:    map[string]any{"success": map[string]any{"body": "Equipment by code"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/laboratory/equipment",
+		HandlerFunc: labHandler.ListLabEquipment,
+		Category:    "laboratory",
+		Input:       &router.RouteInput{RequiredAuth: true},
+		Response:    map[string]any{"success": map[string]any{"body": "All equipment"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/laboratory/equipment/type/{type}",
+		HandlerFunc: labHandler.ListLabEquipmentByType,
+		Category:    "laboratory",
+		Input:       &router.RouteInput{RequiredAuth: true, PathParameters: map[string]string{"type": "string"}},
+		Response:    map[string]any{"success": map[string]any{"body": "Equipment by type"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/laboratory/equipment/calibration-due",
+		HandlerFunc: labHandler.ListCalibrationDue,
+		Category:    "laboratory",
+		Input: &router.RouteInput{
+			RequiredAuth:    true,
+			QueryParameters: map[string]string{"days": "int (default: 30)"},
+		},
+		Response: map[string]any{"success": map[string]any{"body": "Equipment due for calibration"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "PUT",
+		Path:        "/laboratory/equipment/{id}",
+		HandlerFunc: labHandler.UpdateLabEquipment,
+		Category:    "laboratory",
+		Input: &router.RouteInput{
+			RequiredAuth:   true,
+			PathParameters: map[string]string{"id": "int32"},
+			Body: map[string]string{
+				"equipment_name":        "string",
+				"location":              "string",
+				"last_calibration_date": "date",
+				"next_calibration_date": "date",
+				"last_maintenance_date": "date",
+				"next_maintenance_date": "date",
+				"qualification_status":  "string",
+				"qualification_date":    "date",
+				"status":                "string",
+			},
+		},
+		Response: map[string]any{"success": map[string]any{"body": "Updated equipment"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "DELETE",
+		Path:        "/laboratory/equipment/{id}",
+		HandlerFunc: labHandler.DeleteLabEquipment,
+		Category:    "laboratory",
+		Input:       &router.RouteInput{RequiredAuth: true, PathParameters: map[string]string{"id": "int32"}},
+		Response:    map[string]any{"success": map[string]any{"message": "Equipment deleted successfully"}},
+	})
+
+	// Lab Samples
+	// ============================
+
+	r.Register(&router.Route{
+		Method:      "POST",
+		Path:        "/laboratory/samples",
+		HandlerFunc: labHandler.CreateLabSample,
+		Category:    "laboratory",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			Body: map[string]string{
+				"sample_number":      "string (required)",
+				"material_id":        "int32 (required)",
+				"lot_number":         "string",
+				"sample_type":        "string (required) - RAW_MATERIAL, FINISHED_PRODUCT, IN_PROCESS, RETAINED, STABILITY",
+				"sample_quantity":    "numeric",
+				"unit":               "string",
+				"collected_by":       "int32 (required)",
+				"collected_date":     "timestamptz (required)",
+				"received_by":        "int32",
+				"received_date":      "timestamptz",
+				"storage_location":   "string",
+				"storage_conditions": "string",
+				"sample_condition":   "string - GOOD, DAMAGED, CONTAMINATED",
+				"chain_of_custody":   "JSONB",
+				"disposal_date":      "date",
+				"status":             "string - COLLECTED, RECEIVED, IN_TESTING, TESTED, DISPOSED",
+			},
+		},
+		Response: map[string]any{"success": map[string]any{"body": "Created sample"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/laboratory/samples/{id}",
+		HandlerFunc: labHandler.GetLabSample,
+		Category:    "laboratory",
+		Input:       &router.RouteInput{RequiredAuth: true, PathParameters: map[string]string{"id": "int32"}},
+		Response:    map[string]any{"success": map[string]any{"body": "Sample details with chain of custody"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/laboratory/samples/number/{number}",
+		HandlerFunc: labHandler.GetLabSampleByNumber,
+		Category:    "laboratory",
+		Input:       &router.RouteInput{RequiredAuth: true, PathParameters: map[string]string{"number": "string"}},
+		Response:    map[string]any{"success": map[string]any{"body": "Sample by sample number"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/laboratory/samples",
+		HandlerFunc: labHandler.ListLabSamples,
+		Category:    "laboratory",
+		Input:       &router.RouteInput{RequiredAuth: true},
+		Response:    map[string]any{"success": map[string]any{"body": "All samples"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/laboratory/samples/status/{status}",
+		HandlerFunc: labHandler.ListLabSamplesByStatus,
+		Category:    "laboratory",
+		Input:       &router.RouteInput{RequiredAuth: true, PathParameters: map[string]string{"status": "string"}},
+		Response:    map[string]any{"success": map[string]any{"body": "Samples by status"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/laboratory/samples/material/{material_id}",
+		HandlerFunc: labHandler.ListLabSamplesByMaterial,
+		Category:    "laboratory",
+		Input:       &router.RouteInput{RequiredAuth: true, PathParameters: map[string]string{"material_id": "int32"}},
+		Response:    map[string]any{"success": map[string]any{"body": "Samples for material"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "PUT",
+		Path:        "/laboratory/samples/{id}",
+		HandlerFunc: labHandler.UpdateLabSample,
+		Category:    "laboratory",
+		Input: &router.RouteInput{
+			RequiredAuth:   true,
+			PathParameters: map[string]string{"id": "int32"},
+			Body: map[string]string{
+				"received_by":        "int32",
+				"received_date":      "timestamptz",
+				"storage_location":   "string",
+				"storage_conditions": "string",
+				"sample_condition":   "string",
+				"chain_of_custody":   "JSONB",
+				"disposal_date":      "date",
+				"status":             "string",
+			},
+		},
+		Response: map[string]any{"success": map[string]any{"body": "Updated sample"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "DELETE",
+		Path:        "/laboratory/samples/{id}",
+		HandlerFunc: labHandler.DeleteLabSample,
+		Category:    "laboratory",
+		Input:       &router.RouteInput{RequiredAuth: true, PathParameters: map[string]string{"id": "int32"}},
+		Response:    map[string]any{"success": map[string]any{"message": "Sample deleted successfully"}},
+	})
+
+	// Lab Test Assignments
+	// ============================
+
+	r.Register(&router.Route{
+		Method:      "POST",
+		Path:        "/laboratory/test-assignments",
+		HandlerFunc: labHandler.CreateLabTestAssignment,
+		Category:    "laboratory",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			Body: map[string]string{
+				"sample_id":            "int32 (required)",
+				"test_method_id":       "int32 (required)",
+				"assigned_to":          "int32 (required)",
+				"assigned_by":          "int32 (required)",
+				"assigned_date":        "timestamptz (required)",
+				"due_date":             "timestamptz",
+				"priority":             "string - ROUTINE, URGENT, CRITICAL",
+				"special_instructions": "text",
+				"status":               "string - ASSIGNED, IN_PROGRESS, COMPLETED, CANCELLED",
+			},
+		},
+		Response: map[string]any{"success": map[string]any{"body": "Created test assignment"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/laboratory/test-assignments/{id}",
+		HandlerFunc: labHandler.GetLabTestAssignment,
+		Category:    "laboratory",
+		Input:       &router.RouteInput{RequiredAuth: true, PathParameters: map[string]string{"id": "int32"}},
+		Response:    map[string]any{"success": map[string]any{"body": "Test assignment details"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/laboratory/test-assignments",
+		HandlerFunc: labHandler.ListPendingTestAssignments,
+		Category:    "laboratory",
+		Input:       &router.RouteInput{RequiredAuth: true},
+		Response:    map[string]any{"success": map[string]any{"body": "All test assignments"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/laboratory/test-assignments/analyst/{analyst_id}",
+		HandlerFunc: labHandler.ListLabTestAssignmentsByAnalyst,
+		Category:    "laboratory",
+		Input:       &router.RouteInput{RequiredAuth: true, PathParameters: map[string]string{"analyst_id": "int32"}},
+		Response:    map[string]any{"success": map[string]any{"body": "Assignments for analyst"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "PUT",
+		Path:        "/laboratory/test-assignments/{id}",
+		HandlerFunc: labHandler.UpdateLabTestAssignment,
+		Category:    "laboratory",
+		Input: &router.RouteInput{
+			RequiredAuth:   true,
+			PathParameters: map[string]string{"id": "int32"},
+			Body: map[string]string{
+				"assigned_to":          "int32",
+				"due_date":             "timestamptz",
+				"priority":             "string",
+				"special_instructions": "text",
+				"status":               "string",
+			},
+		},
+		Response: map[string]any{"success": map[string]any{"body": "Updated test assignment"}},
+	})
+
+	// Lab Test Results
+	// ============================
+
+	r.Register(&router.Route{
+		Method:      "POST",
+		Path:        "/laboratory/test-results",
+		HandlerFunc: labHandler.CreateLabTestResult,
+		Category:    "laboratory",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			Body: map[string]string{
+				"assignment_id":            "int32 (required)",
+				"test_started_date":        "timestamptz (required)",
+				"test_completed_date":      "timestamptz",
+				"result_value":             "numeric",
+				"result_unit":              "string",
+				"result_text":              "text",
+				"specification_min":        "numeric",
+				"specification_max":        "numeric",
+				"result_status":            "string (required) - PASS, FAIL, INCONCLUSIVE, PENDING_REVIEW",
+				"equipment_used":           "[]int32",
+				"reagent_lot_numbers":      "JSONB",
+				"environmental_conditions": "JSONB",
+				"observations":             "text",
+				"uncertainty":              "numeric",
+				"reviewed_by":              "int32",
+				"reviewed_date":            "timestamptz",
+				"approved_by":              "int32",
+				"approved_date":            "timestamptz",
+			},
+		},
+		Response: map[string]any{"success": map[string]any{"body": "Created test result"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/laboratory/test-results/{id}",
+		HandlerFunc: labHandler.GetLabTestResult,
+		Category:    "laboratory",
+		Input:       &router.RouteInput{RequiredAuth: true, PathParameters: map[string]string{"id": "int32"}},
+		Response:    map[string]any{"success": map[string]any{"body": "Test result details"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/laboratory/test-results/assignment/{assignment_id}",
+		HandlerFunc: labHandler.ListLabTestResultsByAssignment,
+		Category:    "laboratory",
+		Input:       &router.RouteInput{RequiredAuth: true, PathParameters: map[string]string{"assignment_id": "int32"}},
+		Response:    map[string]any{"success": map[string]any{"body": "All results for assignment"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "PUT",
+		Path:        "/laboratory/test-results/{id}",
+		HandlerFunc: labHandler.UpdateLabTestResult,
+		Category:    "laboratory",
+		Input: &router.RouteInput{
+			RequiredAuth:   true,
+			PathParameters: map[string]string{"id": "int32"},
+			Body: map[string]string{
+				"result_value":  "numeric",
+				"result_unit":   "string",
+				"result_text":   "text",
+				"result_status": "string",
+				"observations":  "text",
+				"reviewed_by":   "int32",
+				"reviewed_date": "timestamptz",
+				"approved_by":   "int32",
+				"approved_date": "timestamptz",
+			},
+		},
+		Response: map[string]any{"success": map[string]any{"body": "Updated test result"}},
+	})
+
+	// Certificates of Analysis (CoA)
+	// ============================
+
+	r.Register(&router.Route{
+		Method:      "POST",
+		Path:        "/laboratory/certificates",
+		HandlerFunc: labHandler.CreateCertificateOfAnalysis,
+		Category:    "laboratory",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			Body: map[string]string{
+				"certificate_number": "string (required)",
+				"sample_id":          "int32 (required)",
+				"material_id":        "int32 (required)",
+				"lot_number":         "string (required)",
+				"test_results":       "JSONB (required)",
+				"issue_date":         "date (required)",
+				"expiry_date":        "date",
+				"prepared_by":        "int32 (required)",
+				"reviewed_by":        "int32",
+				"approved_by":        "int32",
+				"approved_date":      "date",
+				"status":             "string - DRAFT, ISSUED, CANCELLED",
+			},
+		},
+		Response: map[string]any{"success": map[string]any{"body": "Created certificate"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/laboratory/certificates/{id}",
+		HandlerFunc: labHandler.GetCertificateOfAnalysis,
+		Category:    "laboratory",
+		Input:       &router.RouteInput{RequiredAuth: true, PathParameters: map[string]string{"id": "int32"}},
+		Response:    map[string]any{"success": map[string]any{"body": "Certificate details"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/laboratory/certificates/number/{number}",
+		HandlerFunc: labHandler.GetCertificateByNumber,
+		Category:    "laboratory",
+		Input:       &router.RouteInput{RequiredAuth: true, PathParameters: map[string]string{"number": "string"}},
+		Response:    map[string]any{"success": map[string]any{"body": "Certificate by number"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/laboratory/certificates/sample/{sample_id}",
+		HandlerFunc: labHandler.ListCertificatesBySample,
+		Category:    "laboratory",
+		Input:       &router.RouteInput{RequiredAuth: true, PathParameters: map[string]string{"sample_id": "int32"}},
+		Response:    map[string]any{"success": map[string]any{"body": "All certificates for sample"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "PUT",
+		Path:        "/laboratory/certificates/{id}",
+		HandlerFunc: labHandler.UpdateCertificateOfAnalysis,
+		Category:    "laboratory",
+		Input: &router.RouteInput{
+			RequiredAuth:   true,
+			PathParameters: map[string]string{"id": "int32"},
+			Body: map[string]string{
+				"test_results":  "JSONB",
+				"reviewed_by":   "int32",
+				"approved_by":   "int32",
+				"approved_date": "date",
+				"status":        "string",
+			},
+		},
+		Response: map[string]any{"success": map[string]any{"body": "Updated certificate"}},
+	})
+
+	// OOS Investigations
+	// ============================
+
+	r.Register(&router.Route{
+		Method:      "POST",
+		Path:        "/laboratory/oos-investigations",
+		HandlerFunc: labHandler.CreateOOSInvestigation,
+		Category:    "laboratory",
+		Input: &router.RouteInput{
+			RequiredAuth: true,
+			Body: map[string]string{
+				"oos_number":              "string (required)",
+				"test_result_id":          "int32 (required)",
+				"reported_by":             "int32 (required)",
+				"reported_date":           "date (required)",
+				"investigation_type":      "string (required) - PHASE_I, PHASE_II",
+				"description":             "text (required)",
+				"phase_i_findings":        "text",
+				"phase_i_completed_by":    "int32",
+				"phase_i_completed_date":  "date",
+				"phase_ii_required":       "boolean",
+				"phase_ii_findings":       "text",
+				"phase_ii_completed_by":   "int32",
+				"phase_ii_completed_date": "date",
+				"root_cause":              "text",
+				"corrective_actions":      "text",
+				"preventive_actions":      "text",
+				"attachments":             "JSONB",
+				"reviewed_by":             "int32",
+				"reviewed_date":           "date",
+				"approved_by":             "int32",
+				"approved_date":           "date",
+				"status":                  "string - OPEN, PHASE_I_IN_PROGRESS, PHASE_I_COMPLETED, PHASE_II_IN_PROGRESS, CLOSED",
+			},
+		},
+		Response: map[string]any{"success": map[string]any{"body": "Created OOS investigation"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/laboratory/oos-investigations/{id}",
+		HandlerFunc: labHandler.GetOOSInvestigation,
+		Category:    "laboratory",
+		Input:       &router.RouteInput{RequiredAuth: true, PathParameters: map[string]string{"id": "int32"}},
+		Response:    map[string]any{"success": map[string]any{"body": "OOS investigation details"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/laboratory/oos-investigations",
+		HandlerFunc: labHandler.ListOOSInvestigations,
+		Category:    "laboratory",
+		Input:       &router.RouteInput{RequiredAuth: true},
+		Response:    map[string]any{"success": map[string]any{"body": "All OOS investigations"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "GET",
+		Path:        "/laboratory/oos-investigations/open",
+		HandlerFunc: labHandler.ListOpenOOSInvestigations,
+		Category:    "laboratory",
+		Input:       &router.RouteInput{RequiredAuth: true},
+		Response:    map[string]any{"success": map[string]any{"body": "All open OOS investigations"}},
+	})
+
+	r.Register(&router.Route{
+		Method:      "PUT",
+		Path:        "/laboratory/oos-investigations/{id}",
+		HandlerFunc: labHandler.UpdateOOSInvestigation,
+		Category:    "laboratory",
+		Input: &router.RouteInput{
+			RequiredAuth:   true,
+			PathParameters: map[string]string{"id": "int32"},
+			Body: map[string]string{
+				"phase_i_findings":        "text",
+				"phase_i_completed_by":    "int32",
+				"phase_i_completed_date":  "date",
+				"phase_ii_required":       "boolean",
+				"phase_ii_findings":       "text",
+				"phase_ii_completed_by":   "int32",
+				"phase_ii_completed_date": "date",
+				"root_cause":              "text",
+				"corrective_actions":      "text",
+				"preventive_actions":      "text",
+				"attachments":             "JSONB",
+				"reviewed_by":             "int32",
+				"reviewed_date":           "date",
+				"approved_by":             "int32",
+				"approved_date":           "date",
+				"status":                  "string",
+			},
+		},
+		Response: map[string]any{"success": map[string]any{"body": "Updated OOS investigation"}},
+	})
+
 }

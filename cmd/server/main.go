@@ -164,7 +164,15 @@ func main() {
 		SkipPaths:            []string{"/api/v1/login", "/login", "/api/v1/register", "/register", "forget-password", "/api/v1/forget-password", "/health"},
 	}
 
-	// Request → Recovery → RequestID → Logger → Security → CORS → RateLimiter → Timeout → SessionAuth → Handler
+	// 9. Pagination - Parse pagination query parameters
+	paginationConfig := &middlewares.PaginationConfig{
+		DefaultPage:     cfg.Pagination.DefaultPage,
+		DefaultPageSize: cfg.Pagination.DefaultPageSize,
+		MaxPageSize:     cfg.Pagination.MaxPageSize,
+		Logger:          logger,
+	}
+
+	// Request → Recovery → RequestID → Logger → Security → CORS → RateLimiter → Timeout → SessionAuth → Pagination → Handler
 	r := router.NewRouter(routerConfig, logger,
 		middlewares.Recovery(recoveryConfig),     // 1. Catch panics
 		observability.RequestID(requestIDConfig), // 2. Add request ID
@@ -174,6 +182,7 @@ func main() {
 		middlewares.RateLimit(rateLimiterConfig), // 6. Rate limiting
 		middlewares.Timeout(timeoutConfig),       // 7. Request timeout
 		middlewares.SessionAuth(sessionConfig),   // 8. Authentication
+		middlewares.Pagination(paginationConfig), // 9. Pagination
 	)
 	queries := dbq.New(db)
 	// Register application routes

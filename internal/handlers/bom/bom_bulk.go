@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -233,10 +234,26 @@ func (bh *BomHandler) BulkCreateBillOfMaterials(w http.ResponseWriter, r *http.R
 			continue
 		}
 
-		// Build create params
+		// Build create params - convert numeric values properly
 		var pgQuantity, pgScrap pgtype.Numeric
-		pgQuantity.Scan(comp.Quantity)
-		pgScrap.Scan(*scrapPercentage)
+
+		// Convert quantity (handle both int and float)
+		if err := pgQuantity.Scan(fmt.Sprintf("%.4f", comp.Quantity)); err != nil {
+			failed = append(failed, BOMFailedEntry{
+				ComponentMaterialID: comp.ComponentMaterialID,
+				Reason:              fmt.Sprintf("Invalid quantity value: %v", comp.Quantity),
+			})
+			continue
+		}
+
+		// Convert scrap percentage
+		if err := pgScrap.Scan(fmt.Sprintf("%.2f", *scrapPercentage)); err != nil {
+			failed = append(failed, BOMFailedEntry{
+				ComponentMaterialID: comp.ComponentMaterialID,
+				Reason:              fmt.Sprintf("Invalid scrap percentage value: %v", *scrapPercentage),
+			})
+			continue
+		}
 
 		params := db.CreateBillOfMaterialParams{
 			FinishedMaterialID:  pgtype.Int4{Int32: req.FinishedMaterialID, Valid: true},
@@ -271,8 +288,9 @@ func (bh *BomHandler) BulkCreateBillOfMaterials(w http.ResponseWriter, r *http.R
 		}
 		if comp.EstimatedCost != nil {
 			var pgCost pgtype.Numeric
-			pgCost.Scan(*comp.EstimatedCost)
-			params.EstimatedCost = pgCost
+			if err := pgCost.Scan(fmt.Sprintf("%.4f", *comp.EstimatedCost)); err == nil {
+				params.EstimatedCost = pgCost
+			}
 		}
 		if comp.SupplierID != nil {
 			params.SupplierID = pgtype.Int4{Int32: *comp.SupplierID, Valid: true}
@@ -285,9 +303,36 @@ func (bh *BomHandler) BulkCreateBillOfMaterials(w http.ResponseWriter, r *http.R
 		bom, err := bh.h.Queries.CreateBillOfMaterial(ctx, params)
 		if err != nil {
 			bh.h.Logger.Error("Failed to create BOM", "error", err, "component_id", comp.ComponentMaterialID)
+
+			// Provide more specific error messages
+			errMsg := err.Error()
+			var reason string
+
+			if strings.Contains(errMsg, "idx_bom_unique_active") || strings.Contains(errMsg, "duplicate key") {
+				reason = fmt.Sprintf("Duplicate BOM entry - this component already exists for this finished material (version: %s)", *version)
+			} else if strings.Contains(errMsg, "foreign key") {
+				if strings.Contains(errMsg, "finished_material_id") {
+					reason = fmt.Sprintf("Invalid finished material ID: %d does not exist", req.FinishedMaterialID)
+				} else if strings.Contains(errMsg, "component_material_id") {
+					reason = fmt.Sprintf("Invalid component material ID: %d does not exist", comp.ComponentMaterialID)
+				} else if strings.Contains(errMsg, "unit_measure_id") {
+					reason = "Invalid unit measure ID"
+				} else if strings.Contains(errMsg, "supplier_id") {
+					reason = "Invalid supplier ID"
+				} else {
+					reason = "Foreign key constraint violation - referenced entity does not exist"
+				}
+			} else if strings.Contains(errMsg, "chk_bom_date_range") {
+				reason = "Effective date must be before expiry date"
+			} else if strings.Contains(errMsg, "check constraint") {
+				reason = "Validation failed - check your input values (scrap percentage, priority, etc.)"
+			} else {
+				reason = fmt.Sprintf("Database error: %v", err)
+			}
+
 			failed = append(failed, BOMFailedEntry{
 				ComponentMaterialID: comp.ComponentMaterialID,
-				Reason:              "Failed to create BOM entry",
+				Reason:              reason,
 			})
 			continue
 		}

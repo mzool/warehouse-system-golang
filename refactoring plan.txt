@@ -1,0 +1,12 @@
+I will drop the small sql queries and use sqlc less.
+What I want is one query for each transaction or database operation.
+for example, I will create a function for opening stock that will
+check if stock is exists or not, then conditional insert or update.
+also, i need to split the registration of handlers i can not read all fuck long files.
+I will update go engine to send the response as views or json.
+I will update go engine also to register handlers in cleaner way, large structs are bad.
+I need a away to make go engine create tables for insertion/reads/update the database
+tables by default in development stage.
+Here i will make users login then connecting to a socket for life events, this app
+is meant to be internal tool, go can handle this efficiently even for large users using
+small resources.

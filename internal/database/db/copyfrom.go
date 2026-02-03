@@ -56,3 +56,43 @@ func (r iteratorForBatchCreateMaterials) Err() error {
 func (q *Queries) BatchCreateMaterials(ctx context.Context, arg []BatchCreateMaterialsParams) (int64, error) {
 	return q.db.CopyFrom(ctx, []string{"materials"}, []string{"name", "description", "type", "saleable", "unit_price", "sale_price", "category", "code", "sku", "barcode", "measure_unit_id", "weight", "is_toxic", "is_flammable", "is_fragile", "tax_rate", "is_active"}, &iteratorForBatchCreateMaterials{rows: arg})
 }
+
+// iteratorForBulkCreateQualityInspectionResults implements pgx.CopyFromSource.
+type iteratorForBulkCreateQualityInspectionResults struct {
+	rows                 []BulkCreateQualityInspectionResultsParams
+	skippedFirstNextCall bool
+}
+
+func (r *iteratorForBulkCreateQualityInspectionResults) Next() bool {
+	if len(r.rows) == 0 {
+		return false
+	}
+	if !r.skippedFirstNextCall {
+		r.skippedFirstNextCall = true
+		return true
+	}
+	r.rows = r.rows[1:]
+	return len(r.rows) > 0
+}
+
+func (r iteratorForBulkCreateQualityInspectionResults) Values() ([]interface{}, error) {
+	return []interface{}{
+		r.rows[0].InspectionID,
+		r.rows[0].CriteriaID,
+		r.rows[0].CriteriaName,
+		r.rows[0].MeasuredValue,
+		r.rows[0].TextValue,
+		r.rows[0].IsPassed,
+		r.rows[0].Deviation,
+		r.rows[0].SampleNumber,
+		r.rows[0].Notes,
+	}, nil
+}
+
+func (r iteratorForBulkCreateQualityInspectionResults) Err() error {
+	return nil
+}
+
+func (q *Queries) BulkCreateQualityInspectionResults(ctx context.Context, arg []BulkCreateQualityInspectionResultsParams) (int64, error) {
+	return q.db.CopyFrom(ctx, []string{"quality_inspection_results"}, []string{"inspection_id", "criteria_id", "criteria_name", "measured_value", "text_value", "is_passed", "deviation", "sample_number", "notes"}, &iteratorForBulkCreateQualityInspectionResults{rows: arg})
+}

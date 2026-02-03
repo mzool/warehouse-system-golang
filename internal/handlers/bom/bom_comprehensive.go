@@ -408,9 +408,10 @@ func (bh *BomHandler) GetBOMCostBreakdown(w http.ResponseWriter, r *http.Request
 	var totalCost float64
 	for _, item := range breakdown {
 		if item.TotalCost.Valid {
-			var c float64
-			item.TotalCost.Scan(&c)
-			totalCost += c
+			// Convert pgtype.Numeric to float64
+			if f, err := item.TotalCost.Float64Value(); err == nil {
+				totalCost += f.Float64
+			}
 		}
 	}
 

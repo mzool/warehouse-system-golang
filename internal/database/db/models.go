@@ -11,6 +11,192 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type CalibrationStatus string
+
+const (
+	CalibrationStatusCalibrated       CalibrationStatus = "calibrated"
+	CalibrationStatusDueSoon          CalibrationStatus = "due_soon"
+	CalibrationStatusOverdue          CalibrationStatus = "overdue"
+	CalibrationStatusOutOfService     CalibrationStatus = "out_of_service"
+	CalibrationStatusUnderCalibration CalibrationStatus = "under_calibration"
+)
+
+func (e *CalibrationStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = CalibrationStatus(s)
+	case string:
+		*e = CalibrationStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for CalibrationStatus: %T", src)
+	}
+	return nil
+}
+
+type NullCalibrationStatus struct {
+	CalibrationStatus CalibrationStatus `json:"calibration_status"`
+	Valid             bool              `json:"valid"` // Valid is true if CalibrationStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullCalibrationStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.CalibrationStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.CalibrationStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullCalibrationStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.CalibrationStatus), nil
+}
+
+type CoaStatus string
+
+const (
+	CoaStatusDraft         CoaStatus = "draft"
+	CoaStatusPendingReview CoaStatus = "pending_review"
+	CoaStatusApproved      CoaStatus = "approved"
+	CoaStatusIssued        CoaStatus = "issued"
+	CoaStatusVoid          CoaStatus = "void"
+)
+
+func (e *CoaStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = CoaStatus(s)
+	case string:
+		*e = CoaStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for CoaStatus: %T", src)
+	}
+	return nil
+}
+
+type NullCoaStatus struct {
+	CoaStatus CoaStatus `json:"coa_status"`
+	Valid     bool      `json:"valid"` // Valid is true if CoaStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullCoaStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.CoaStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.CoaStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullCoaStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.CoaStatus), nil
+}
+
+type LabSampleStatus string
+
+const (
+	LabSampleStatusPending   LabSampleStatus = "pending"
+	LabSampleStatusInTesting LabSampleStatus = "in_testing"
+	LabSampleStatusCompleted LabSampleStatus = "completed"
+	LabSampleStatusOnHold    LabSampleStatus = "on_hold"
+	LabSampleStatusCancelled LabSampleStatus = "cancelled"
+	LabSampleStatusConsumed  LabSampleStatus = "consumed"
+	LabSampleStatusRetained  LabSampleStatus = "retained"
+	LabSampleStatusDisposed  LabSampleStatus = "disposed"
+)
+
+func (e *LabSampleStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = LabSampleStatus(s)
+	case string:
+		*e = LabSampleStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for LabSampleStatus: %T", src)
+	}
+	return nil
+}
+
+type NullLabSampleStatus struct {
+	LabSampleStatus LabSampleStatus `json:"lab_sample_status"`
+	Valid           bool            `json:"valid"` // Valid is true if LabSampleStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullLabSampleStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.LabSampleStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.LabSampleStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullLabSampleStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.LabSampleStatus), nil
+}
+
+type LabSampleType string
+
+const (
+	LabSampleTypeRawMaterial     LabSampleType = "raw_material"
+	LabSampleTypeFinishedProduct LabSampleType = "finished_product"
+	LabSampleTypeInProcess       LabSampleType = "in_process"
+	LabSampleTypeEnvironmental   LabSampleType = "environmental"
+	LabSampleTypeStability       LabSampleType = "stability"
+	LabSampleTypeRetain          LabSampleType = "retain"
+	LabSampleTypeReference       LabSampleType = "reference"
+	LabSampleTypeControl         LabSampleType = "control"
+)
+
+func (e *LabSampleType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = LabSampleType(s)
+	case string:
+		*e = LabSampleType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for LabSampleType: %T", src)
+	}
+	return nil
+}
+
+type NullLabSampleType struct {
+	LabSampleType LabSampleType `json:"lab_sample_type"`
+	Valid         bool          `json:"valid"` // Valid is true if LabSampleType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullLabSampleType) Scan(value interface{}) error {
+	if value == nil {
+		ns.LabSampleType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.LabSampleType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullLabSampleType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.LabSampleType), nil
+}
+
 type MaterialType string
 
 const (
@@ -54,6 +240,279 @@ func (ns NullMaterialType) Value() (driver.Value, error) {
 		return nil, nil
 	}
 	return string(ns.MaterialType), nil
+}
+
+type NcrSeverity string
+
+const (
+	NcrSeverityCritical    NcrSeverity = "critical"
+	NcrSeverityMajor       NcrSeverity = "major"
+	NcrSeverityMinor       NcrSeverity = "minor"
+	NcrSeverityObservation NcrSeverity = "observation"
+)
+
+func (e *NcrSeverity) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = NcrSeverity(s)
+	case string:
+		*e = NcrSeverity(s)
+	default:
+		return fmt.Errorf("unsupported scan type for NcrSeverity: %T", src)
+	}
+	return nil
+}
+
+type NullNcrSeverity struct {
+	NcrSeverity NcrSeverity `json:"ncr_severity"`
+	Valid       bool        `json:"valid"` // Valid is true if NcrSeverity is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullNcrSeverity) Scan(value interface{}) error {
+	if value == nil {
+		ns.NcrSeverity, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.NcrSeverity.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullNcrSeverity) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.NcrSeverity), nil
+}
+
+type NcrStatus string
+
+const (
+	NcrStatusOpen           NcrStatus = "open"
+	NcrStatusInvestigating  NcrStatus = "investigating"
+	NcrStatusActionRequired NcrStatus = "action_required"
+	NcrStatusInProgress     NcrStatus = "in_progress"
+	NcrStatusResolved       NcrStatus = "resolved"
+	NcrStatusClosed         NcrStatus = "closed"
+	NcrStatusCancelled      NcrStatus = "cancelled"
+)
+
+func (e *NcrStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = NcrStatus(s)
+	case string:
+		*e = NcrStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for NcrStatus: %T", src)
+	}
+	return nil
+}
+
+type NullNcrStatus struct {
+	NcrStatus NcrStatus `json:"ncr_status"`
+	Valid     bool      `json:"valid"` // Valid is true if NcrStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullNcrStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.NcrStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.NcrStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullNcrStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.NcrStatus), nil
+}
+
+type NcrType string
+
+const (
+	NcrTypeSupplier NcrType = "supplier"
+	NcrTypeProcess  NcrType = "process"
+	NcrTypeCustomer NcrType = "customer"
+	NcrTypeAudit    NcrType = "audit"
+	NcrTypeOther    NcrType = "other"
+)
+
+func (e *NcrType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = NcrType(s)
+	case string:
+		*e = NcrType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for NcrType: %T", src)
+	}
+	return nil
+}
+
+type NullNcrType struct {
+	NcrType NcrType `json:"ncr_type"`
+	Valid   bool    `json:"valid"` // Valid is true if NcrType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullNcrType) Scan(value interface{}) error {
+	if value == nil {
+		ns.NcrType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.NcrType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullNcrType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.NcrType), nil
+}
+
+type QualityInspectionStatus string
+
+const (
+	QualityInspectionStatusPending    QualityInspectionStatus = "pending"
+	QualityInspectionStatusInProgress QualityInspectionStatus = "in_progress"
+	QualityInspectionStatusPassed     QualityInspectionStatus = "passed"
+	QualityInspectionStatusFailed     QualityInspectionStatus = "failed"
+	QualityInspectionStatusPartial    QualityInspectionStatus = "partial"
+	QualityInspectionStatusOnHold     QualityInspectionStatus = "on_hold"
+	QualityInspectionStatusCancelled  QualityInspectionStatus = "cancelled"
+)
+
+func (e *QualityInspectionStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = QualityInspectionStatus(s)
+	case string:
+		*e = QualityInspectionStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for QualityInspectionStatus: %T", src)
+	}
+	return nil
+}
+
+type NullQualityInspectionStatus struct {
+	QualityInspectionStatus QualityInspectionStatus `json:"quality_inspection_status"`
+	Valid                   bool                    `json:"valid"` // Valid is true if QualityInspectionStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullQualityInspectionStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.QualityInspectionStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.QualityInspectionStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullQualityInspectionStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.QualityInspectionStatus), nil
+}
+
+type QualityInspectionType string
+
+const (
+	QualityInspectionTypeIncoming       QualityInspectionType = "incoming"
+	QualityInspectionTypeInProcess      QualityInspectionType = "in_process"
+	QualityInspectionTypeFinal          QualityInspectionType = "final"
+	QualityInspectionTypePeriodic       QualityInspectionType = "periodic"
+	QualityInspectionTypeAudit          QualityInspectionType = "audit"
+	QualityInspectionTypeCustomerReturn QualityInspectionType = "customer_return"
+)
+
+func (e *QualityInspectionType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = QualityInspectionType(s)
+	case string:
+		*e = QualityInspectionType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for QualityInspectionType: %T", src)
+	}
+	return nil
+}
+
+type NullQualityInspectionType struct {
+	QualityInspectionType QualityInspectionType `json:"quality_inspection_type"`
+	Valid                 bool                  `json:"valid"` // Valid is true if QualityInspectionType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullQualityInspectionType) Scan(value interface{}) error {
+	if value == nil {
+		ns.QualityInspectionType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.QualityInspectionType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullQualityInspectionType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.QualityInspectionType), nil
+}
+
+type QualityStatus string
+
+const (
+	QualityStatusUnrestricted QualityStatus = "unrestricted"
+	QualityStatusQuarantine   QualityStatus = "quarantine"
+	QualityStatusBlocked      QualityStatus = "blocked"
+	QualityStatusRejected     QualityStatus = "rejected"
+)
+
+func (e *QualityStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = QualityStatus(s)
+	case string:
+		*e = QualityStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for QualityStatus: %T", src)
+	}
+	return nil
+}
+
+type NullQualityStatus struct {
+	QualityStatus QualityStatus `json:"quality_status"`
+	Valid         bool          `json:"valid"` // Valid is true if QualityStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullQualityStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.QualityStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.QualityStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullQualityStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.QualityStatus), nil
 }
 
 type StockDirection string
@@ -147,6 +606,99 @@ func (ns NullStockMovementType) Value() (driver.Value, error) {
 	return string(ns.StockMovementType), nil
 }
 
+type TestMethodStatus string
+
+const (
+	TestMethodStatusDraft       TestMethodStatus = "draft"
+	TestMethodStatusUnderReview TestMethodStatus = "under_review"
+	TestMethodStatusActive      TestMethodStatus = "active"
+	TestMethodStatusInactive    TestMethodStatus = "inactive"
+	TestMethodStatusSuperseded  TestMethodStatus = "superseded"
+)
+
+func (e *TestMethodStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = TestMethodStatus(s)
+	case string:
+		*e = TestMethodStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for TestMethodStatus: %T", src)
+	}
+	return nil
+}
+
+type NullTestMethodStatus struct {
+	TestMethodStatus TestMethodStatus `json:"test_method_status"`
+	Valid            bool             `json:"valid"` // Valid is true if TestMethodStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullTestMethodStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.TestMethodStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.TestMethodStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullTestMethodStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.TestMethodStatus), nil
+}
+
+type TestResultStatus string
+
+const (
+	TestResultStatusPending     TestResultStatus = "pending"
+	TestResultStatusInProgress  TestResultStatus = "in_progress"
+	TestResultStatusPass        TestResultStatus = "pass"
+	TestResultStatusFail        TestResultStatus = "fail"
+	TestResultStatusOutOfSpec   TestResultStatus = "out_of_spec"
+	TestResultStatusRetest      TestResultStatus = "retest"
+	TestResultStatusCancelled   TestResultStatus = "cancelled"
+	TestResultStatusInvalidated TestResultStatus = "invalidated"
+)
+
+func (e *TestResultStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = TestResultStatus(s)
+	case string:
+		*e = TestResultStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for TestResultStatus: %T", src)
+	}
+	return nil
+}
+
+type NullTestResultStatus struct {
+	TestResultStatus TestResultStatus `json:"test_result_status"`
+	Valid            bool             `json:"valid"` // Valid is true if TestResultStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullTestResultStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.TestResultStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.TestResultStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullTestResultStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.TestResultStatus), nil
+}
+
 type UserRole string
 
 const (
@@ -233,6 +785,26 @@ func (ns NullValuationMethod) Value() (driver.Value, error) {
 	return string(ns.ValuationMethod), nil
 }
 
+// Track which analysts are trained/qualified for which test methods
+type AnalystQualification struct {
+	ID                      int32              `json:"id"`
+	AnalystID               int32              `json:"analyst_id"`
+	TestMethodID            int32              `json:"test_method_id"`
+	QualificationDate       pgtype.Date        `json:"qualification_date"`
+	QualifiedBy             pgtype.Int4        `json:"qualified_by"`
+	ExpiryDate              pgtype.Date        `json:"expiry_date"`
+	TrainingCompleted       pgtype.Bool        `json:"training_completed"`
+	TrainingDate            pgtype.Date        `json:"training_date"`
+	TrainingHours           pgtype.Numeric     `json:"training_hours"`
+	AssessmentScore         pgtype.Numeric     `json:"assessment_score"`
+	AssessmentNotes         pgtype.Text        `json:"assessment_notes"`
+	IsActive                pgtype.Bool        `json:"is_active"`
+	RequalificationRequired pgtype.Bool        `json:"requalification_required"`
+	Notes                   pgtype.Text        `json:"notes"`
+	CreatedAt               pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt               pgtype.Timestamptz `json:"updated_at"`
+}
+
 type AuditLog struct {
 	ID        int64              `json:"id"`
 	UserID    pgtype.Int4        `json:"user_id"`
@@ -292,6 +864,40 @@ type BillsOfMaterial struct {
 	ArchivedBy           pgtype.Int4        `json:"archived_by"`
 }
 
+// Formal CoA documents issued to customers
+type CertificatesOfAnalysis struct {
+	ID                  int32              `json:"id"`
+	CoaNumber           string             `json:"coa_number"`
+	MaterialID          int32              `json:"material_id"`
+	BatchNumber         string             `json:"batch_number"`
+	LotNumber           pgtype.Text        `json:"lot_number"`
+	QualityInspectionID pgtype.Int4        `json:"quality_inspection_id"`
+	ManufactureDate     pgtype.Date        `json:"manufacture_date"`
+	ExpiryDate          pgtype.Date        `json:"expiry_date"`
+	Quantity            pgtype.Numeric     `json:"quantity"`
+	UnitID              pgtype.Int4        `json:"unit_id"`
+	TestResults         []byte             `json:"test_results"`
+	CustomerID          pgtype.Int4        `json:"customer_id"`
+	SalesOrderID        pgtype.Int4        `json:"sales_order_id"`
+	RecipientName       pgtype.Text        `json:"recipient_name"`
+	RecipientAddress    pgtype.Text        `json:"recipient_address"`
+	Status              NullCoaStatus      `json:"status"`
+	IssueDate           pgtype.Date        `json:"issue_date"`
+	PreparedBy          pgtype.Int4        `json:"prepared_by"`
+	PreparedDate        pgtype.Date        `json:"prepared_date"`
+	ReviewedBy          pgtype.Int4        `json:"reviewed_by"`
+	ReviewedDate        pgtype.Date        `json:"reviewed_date"`
+	ApprovedBy          pgtype.Int4        `json:"approved_by"`
+	ApprovedDate        pgtype.Date        `json:"approved_date"`
+	DigitalSignature    pgtype.Text        `json:"digital_signature"`
+	SignatureTimestamp  pgtype.Timestamptz `json:"signature_timestamp"`
+	PdfFilePath         pgtype.Text        `json:"pdf_file_path"`
+	TemplateUsed        pgtype.Text        `json:"template_used"`
+	Notes               pgtype.Text        `json:"notes"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+}
+
 type Customer struct {
 	ID           int32              `json:"id"`
 	Name         string             `json:"name"`
@@ -302,6 +908,170 @@ type Customer struct {
 	Meta         []byte             `json:"meta"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
+// Laboratory instruments and equipment with calibration tracking
+type LabEquipment struct {
+	ID                       int32                 `json:"id"`
+	EquipmentCode            string                `json:"equipment_code"`
+	EquipmentName            string                `json:"equipment_name"`
+	EquipmentType            string                `json:"equipment_type"`
+	Manufacturer             pgtype.Text           `json:"manufacturer"`
+	ModelNumber              pgtype.Text           `json:"model_number"`
+	SerialNumber             pgtype.Text           `json:"serial_number"`
+	Location                 pgtype.Text           `json:"location"`
+	WarehouseID              pgtype.Int4           `json:"warehouse_id"`
+	CalibrationFrequencyDays pgtype.Int4           `json:"calibration_frequency_days"`
+	LastCalibrationDate      pgtype.Date           `json:"last_calibration_date"`
+	NextCalibrationDate      pgtype.Date           `json:"next_calibration_date"`
+	CalibrationStatus        NullCalibrationStatus `json:"calibration_status"`
+	CalibrationCertificate   pgtype.Text           `json:"calibration_certificate"`
+	LastMaintenanceDate      pgtype.Date           `json:"last_maintenance_date"`
+	NextMaintenanceDate      pgtype.Date           `json:"next_maintenance_date"`
+	MaintenanceNotes         pgtype.Text           `json:"maintenance_notes"`
+	IsOperational            pgtype.Bool           `json:"is_operational"`
+	IsQualified              pgtype.Bool           `json:"is_qualified"`
+	QualificationDate        pgtype.Date           `json:"qualification_date"`
+	Attachments              []byte                `json:"attachments"`
+	Notes                    pgtype.Text           `json:"notes"`
+	CreatedAt                pgtype.Timestamptz    `json:"created_at"`
+	UpdatedAt                pgtype.Timestamptz    `json:"updated_at"`
+}
+
+// Physical samples collected for testing with chain of custody
+type LabSample struct {
+	ID                   int32               `json:"id"`
+	SampleNumber         string              `json:"sample_number"`
+	SampleType           LabSampleType       `json:"sample_type"`
+	SampleStatus         NullLabSampleStatus `json:"sample_status"`
+	MaterialID           pgtype.Int4         `json:"material_id"`
+	BatchNumber          pgtype.Text         `json:"batch_number"`
+	LotNumber            pgtype.Text         `json:"lot_number"`
+	QualityInspectionID  pgtype.Int4         `json:"quality_inspection_id"`
+	PurchaseOrderID      pgtype.Int4         `json:"purchase_order_id"`
+	StockTransactionID   pgtype.Int4         `json:"stock_transaction_id"`
+	SampleQuantity       pgtype.Numeric      `json:"sample_quantity"`
+	SampleUnitID         pgtype.Int4         `json:"sample_unit_id"`
+	ContainerType        pgtype.Text         `json:"container_type"`
+	ContainerCount       pgtype.Int4         `json:"container_count"`
+	StorageLocation      pgtype.Text         `json:"storage_location"`
+	StorageConditions    pgtype.Text         `json:"storage_conditions"`
+	CollectedBy          pgtype.Int4         `json:"collected_by"`
+	CollectionDate       pgtype.Timestamptz  `json:"collection_date"`
+	CollectionMethod     pgtype.Text         `json:"collection_method"`
+	SamplingPlan         pgtype.Text         `json:"sampling_plan"`
+	ReceivedByLab        pgtype.Int4         `json:"received_by_lab"`
+	LabReceivedDate      pgtype.Timestamptz  `json:"lab_received_date"`
+	TransferredTo        pgtype.Int4         `json:"transferred_to"`
+	TransferDate         pgtype.Timestamptz  `json:"transfer_date"`
+	ChainOfCustody       []byte              `json:"chain_of_custody"`
+	RetentionRequired    pgtype.Bool         `json:"retention_required"`
+	RetentionPeriodDays  pgtype.Int4         `json:"retention_period_days"`
+	RetentionExpiryDate  pgtype.Date         `json:"retention_expiry_date"`
+	DisposedDate         pgtype.Date         `json:"disposed_date"`
+	DisposedBy           pgtype.Int4         `json:"disposed_by"`
+	DisposalMethod       pgtype.Text         `json:"disposal_method"`
+	IsExternalLab        pgtype.Bool         `json:"is_external_lab"`
+	ExternalLabName      pgtype.Text         `json:"external_lab_name"`
+	ExternalLabReference pgtype.Text         `json:"external_lab_reference"`
+	SentToLabDate        pgtype.Date         `json:"sent_to_lab_date"`
+	ExpectedResultsDate  pgtype.Date         `json:"expected_results_date"`
+	Attachments          []byte              `json:"attachments"`
+	Notes                pgtype.Text         `json:"notes"`
+	CreatedAt            pgtype.Timestamptz  `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz  `json:"updated_at"`
+}
+
+// Test work orders linking samples to test methods
+type LabTestAssignment struct {
+	ID             int32                `json:"id"`
+	SampleID       int32                `json:"sample_id"`
+	TestMethodID   int32                `json:"test_method_id"`
+	Priority       pgtype.Int4          `json:"priority"`
+	RequestedDate  pgtype.Date          `json:"requested_date"`
+	ScheduledDate  pgtype.Date          `json:"scheduled_date"`
+	DueDate        pgtype.Date          `json:"due_date"`
+	AssignedTo     pgtype.Int4          `json:"assigned_to"`
+	AssignedDate   pgtype.Timestamptz   `json:"assigned_date"`
+	StartedDate    pgtype.Timestamptz   `json:"started_date"`
+	CompletedDate  pgtype.Timestamptz   `json:"completed_date"`
+	Status         NullTestResultStatus `json:"status"`
+	IsRush         pgtype.Bool          `json:"is_rush"`
+	ResultValue    pgtype.Numeric       `json:"result_value"`
+	ResultText     pgtype.Text          `json:"result_text"`
+	ResultUnitID   pgtype.Int4          `json:"result_unit_id"`
+	PassFail       pgtype.Bool          `json:"pass_fail"`
+	ReviewedBy     pgtype.Int4          `json:"reviewed_by"`
+	ReviewDate     pgtype.Timestamptz   `json:"review_date"`
+	ReviewNotes    pgtype.Text          `json:"review_notes"`
+	IsRetest       pgtype.Bool          `json:"is_retest"`
+	OriginalTestID pgtype.Int4          `json:"original_test_id"`
+	RetestReason   pgtype.Text          `json:"retest_reason"`
+	Notes          pgtype.Text          `json:"notes"`
+	CreatedAt      pgtype.Timestamptz   `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz   `json:"updated_at"`
+}
+
+// Catalog of standard test methods and procedures (ASTM, ISO, internal SOPs)
+type LabTestMethod struct {
+	ID                   int32                `json:"id"`
+	MethodCode           string               `json:"method_code"`
+	MethodName           string               `json:"method_name"`
+	Description          pgtype.Text          `json:"description"`
+	StandardReference    pgtype.Text          `json:"standard_reference"`
+	StandardOrganization pgtype.Text          `json:"standard_organization"`
+	TestType             string               `json:"test_type"`
+	TestCategory         pgtype.Text          `json:"test_category"`
+	Methodology          pgtype.Text          `json:"methodology"`
+	SampleSize           pgtype.Numeric       `json:"sample_size"`
+	SampleUnitID         pgtype.Int4          `json:"sample_unit_id"`
+	PreparationTime      pgtype.Int4          `json:"preparation_time"`
+	TestDuration         pgtype.Int4          `json:"test_duration"`
+	RequiredEquipment    []byte               `json:"required_equipment"`
+	SpecificationLimits  []byte               `json:"specification_limits"`
+	Version              pgtype.Text          `json:"version"`
+	EffectiveDate        pgtype.Date          `json:"effective_date"`
+	SupersedesMethodID   pgtype.Int4          `json:"supersedes_method_id"`
+	Status               NullTestMethodStatus `json:"status"`
+	ApprovedBy           pgtype.Int4          `json:"approved_by"`
+	ApprovalDate         pgtype.Date          `json:"approval_date"`
+	Attachments          []byte               `json:"attachments"`
+	Notes                pgtype.Text          `json:"notes"`
+	IsActive             pgtype.Bool          `json:"is_active"`
+	CreatedAt            pgtype.Timestamptz   `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz   `json:"updated_at"`
+}
+
+// Detailed individual test results and measurements
+type LabTestResult struct {
+	ID                     int32              `json:"id"`
+	TestAssignmentID       int32              `json:"test_assignment_id"`
+	TestDate               pgtype.Timestamptz `json:"test_date"`
+	AnalystID              pgtype.Int4        `json:"analyst_id"`
+	EquipmentID            pgtype.Int4        `json:"equipment_id"`
+	ParameterName          string             `json:"parameter_name"`
+	ResultValue            pgtype.Numeric     `json:"result_value"`
+	ResultText             pgtype.Text        `json:"result_text"`
+	ResultUnitID           pgtype.Int4        `json:"result_unit_id"`
+	SpecificationMin       pgtype.Numeric     `json:"specification_min"`
+	SpecificationMax       pgtype.Numeric     `json:"specification_max"`
+	SpecificationTarget    pgtype.Numeric     `json:"specification_target"`
+	IsInSpec               pgtype.Bool        `json:"is_in_spec"`
+	Deviation              pgtype.Numeric     `json:"deviation"`
+	ReplicateNumber        pgtype.Int4        `json:"replicate_number"`
+	DilutionFactor         pgtype.Numeric     `json:"dilution_factor"`
+	PreparationDetails     pgtype.Text        `json:"preparation_details"`
+	TestTemperature        pgtype.Numeric     `json:"test_temperature"`
+	TestHumidity           pgtype.Numeric     `json:"test_humidity"`
+	TestConditions         []byte             `json:"test_conditions"`
+	SystemSuitabilityPass  pgtype.Bool        `json:"system_suitability_pass"`
+	BlankValue             pgtype.Numeric     `json:"blank_value"`
+	ReferenceStandardValue pgtype.Numeric     `json:"reference_standard_value"`
+	RawDataFile            pgtype.Text        `json:"raw_data_file"`
+	ChromatogramFile       pgtype.Text        `json:"chromatogram_file"`
+	Attachments            []byte             `json:"attachments"`
+	Notes                  pgtype.Text        `json:"notes"`
+	CreatedAt              pgtype.Timestamptz `json:"created_at"`
 }
 
 type Material struct {
@@ -344,6 +1114,18 @@ type MaterialCategory struct {
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
+// Link materials to their required quality criteria
+type MaterialQualitySpec struct {
+	ID                 int32              `json:"id"`
+	MaterialID         int32              `json:"material_id"`
+	CriteriaID         int32              `json:"criteria_id"`
+	IsRequired         pgtype.Bool        `json:"is_required"`
+	CustomToleranceMin pgtype.Numeric     `json:"custom_tolerance_min"`
+	CustomToleranceMax pgtype.Numeric     `json:"custom_tolerance_max"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+}
+
 type MeasureUnit struct {
 	ID               int32              `json:"id"`
 	Name             string             `json:"name"`
@@ -352,6 +1134,84 @@ type MeasureUnit struct {
 	ConvertTo        pgtype.Int4        `json:"convert_to"`
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+}
+
+// Track quality issues, defects, and corrective actions (NCR/CAR)
+type NonConformanceReport struct {
+	ID                  int32              `json:"id"`
+	NcrNumber           string             `json:"ncr_number"`
+	Title               string             `json:"title"`
+	Description         string             `json:"description"`
+	NcrType             NcrType            `json:"ncr_type"`
+	Severity            NcrSeverity        `json:"severity"`
+	Status              NullNcrStatus      `json:"status"`
+	MaterialID          pgtype.Int4        `json:"material_id"`
+	BatchNumber         pgtype.Text        `json:"batch_number"`
+	QuantityAffected    pgtype.Numeric     `json:"quantity_affected"`
+	UnitID              pgtype.Int4        `json:"unit_id"`
+	InspectionID        pgtype.Int4        `json:"inspection_id"`
+	SupplierID          pgtype.Int4        `json:"supplier_id"`
+	CustomerID          pgtype.Int4        `json:"customer_id"`
+	PurchaseOrderID     pgtype.Int4        `json:"purchase_order_id"`
+	SalesOrderID        pgtype.Int4        `json:"sales_order_id"`
+	RootCause           pgtype.Text        `json:"root_cause"`
+	RootCauseAnalysisBy pgtype.Int4        `json:"root_cause_analysis_by"`
+	RootCauseDate       pgtype.Timestamptz `json:"root_cause_date"`
+	CorrectiveAction    pgtype.Text        `json:"corrective_action"`
+	PreventiveAction    pgtype.Text        `json:"preventive_action"`
+	ActionAssignedTo    pgtype.Int4        `json:"action_assigned_to"`
+	ActionDueDate       pgtype.Date        `json:"action_due_date"`
+	ActionCompletedDate pgtype.Date        `json:"action_completed_date"`
+	Disposition         pgtype.Text        `json:"disposition"`
+	CostImpact          pgtype.Numeric     `json:"cost_impact"`
+	ReportedBy          pgtype.Int4        `json:"reported_by"`
+	ReportedDate        pgtype.Timestamptz `json:"reported_date"`
+	ClosedBy            pgtype.Int4        `json:"closed_by"`
+	ClosedDate          pgtype.Timestamptz `json:"closed_date"`
+	Attachments         []byte             `json:"attachments"`
+	Notes               pgtype.Text        `json:"notes"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+}
+
+// Out-of-specification result investigations (Phase I/II)
+type OosInvestigation struct {
+	ID                   int32              `json:"id"`
+	OosNumber            string             `json:"oos_number"`
+	TestAssignmentID     int32              `json:"test_assignment_id"`
+	SampleID             pgtype.Int4        `json:"sample_id"`
+	NcrID                pgtype.Int4        `json:"ncr_id"`
+	OosDescription       string             `json:"oos_description"`
+	Severity             NullNcrSeverity    `json:"severity"`
+	Phase1StartDate      pgtype.Date        `json:"phase_1_start_date"`
+	Phase1CompleteDate   pgtype.Date        `json:"phase_1_complete_date"`
+	Phase1Findings       pgtype.Text        `json:"phase_1_findings"`
+	LabErrorFound        pgtype.Bool        `json:"lab_error_found"`
+	LabErrorDescription  pgtype.Text        `json:"lab_error_description"`
+	Phase2Required       pgtype.Bool        `json:"phase_2_required"`
+	Phase2StartDate      pgtype.Date        `json:"phase_2_start_date"`
+	Phase2CompleteDate   pgtype.Date        `json:"phase_2_complete_date"`
+	Phase2Findings       pgtype.Text        `json:"phase_2_findings"`
+	RootCause            pgtype.Text        `json:"root_cause"`
+	RetestRequired       pgtype.Bool        `json:"retest_required"`
+	RetestCompleted      pgtype.Bool        `json:"retest_completed"`
+	RetestResults        pgtype.Text        `json:"retest_results"`
+	FinalConclusion      pgtype.Text        `json:"final_conclusion"`
+	CorrectiveAction     pgtype.Text        `json:"corrective_action"`
+	PreventiveAction     pgtype.Text        `json:"preventive_action"`
+	BatchDisposition     pgtype.Text        `json:"batch_disposition"`
+	ImpactOnOtherBatches pgtype.Text        `json:"impact_on_other_batches"`
+	InitiatedBy          pgtype.Int4        `json:"initiated_by"`
+	InitiatedDate        pgtype.Timestamptz `json:"initiated_date"`
+	InvestigatorID       pgtype.Int4        `json:"investigator_id"`
+	ReviewedBy           pgtype.Int4        `json:"reviewed_by"`
+	ApprovedBy           pgtype.Int4        `json:"approved_by"`
+	Status               pgtype.Text        `json:"status"`
+	ClosedDate           pgtype.Date        `json:"closed_date"`
+	Notes                pgtype.Text        `json:"notes"`
+	Attachments          []byte             `json:"attachments"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
 }
 
 type PurchaseOrder struct {
@@ -381,6 +1241,92 @@ type PurchaseOrderItem struct {
 	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
 }
 
+// Materials placed on quality hold/quarantine
+type QualityHold struct {
+	ID                  int32              `json:"id"`
+	HoldNumber          string             `json:"hold_number"`
+	MaterialID          int32              `json:"material_id"`
+	WarehouseID         pgtype.Int4        `json:"warehouse_id"`
+	BatchNumber         pgtype.Text        `json:"batch_number"`
+	LotNumber           pgtype.Text        `json:"lot_number"`
+	Quantity            pgtype.Numeric     `json:"quantity"`
+	UnitID              pgtype.Int4        `json:"unit_id"`
+	QualityStatus       QualityStatus      `json:"quality_status"`
+	HoldReason          string             `json:"hold_reason"`
+	InspectionID        pgtype.Int4        `json:"inspection_id"`
+	NcrID               pgtype.Int4        `json:"ncr_id"`
+	PlacedBy            pgtype.Int4        `json:"placed_by"`
+	PlacedDate          pgtype.Timestamptz `json:"placed_date"`
+	ExpectedReleaseDate pgtype.Date        `json:"expected_release_date"`
+	IsReleased          pgtype.Bool        `json:"is_released"`
+	ReleasedBy          pgtype.Int4        `json:"released_by"`
+	ReleasedDate        pgtype.Timestamptz `json:"released_date"`
+	ReleaseNotes        pgtype.Text        `json:"release_notes"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+}
+
+// Main quality inspection records for incoming, in-process, and final inspections
+type QualityInspection struct {
+	ID               int32                       `json:"id"`
+	InspectionNumber string                      `json:"inspection_number"`
+	InspectionType   QualityInspectionType       `json:"inspection_type"`
+	InspectionStatus NullQualityInspectionStatus `json:"inspection_status"`
+	MaterialID       pgtype.Int4                 `json:"material_id"`
+	BatchNumber      pgtype.Text                 `json:"batch_number"`
+	LotNumber        pgtype.Text                 `json:"lot_number"`
+	Quantity         pgtype.Numeric              `json:"quantity"`
+	UnitID           pgtype.Int4                 `json:"unit_id"`
+	PurchaseOrderID  pgtype.Int4                 `json:"purchase_order_id"`
+	SalesOrderID     pgtype.Int4                 `json:"sales_order_id"`
+	StockMovementID  pgtype.Int4                 `json:"stock_movement_id"`
+	SupplierID       pgtype.Int4                 `json:"supplier_id"`
+	InspectionDate   pgtype.Timestamptz          `json:"inspection_date"`
+	InspectorID      pgtype.Int4                 `json:"inspector_id"`
+	ApprovedByID     pgtype.Int4                 `json:"approved_by_id"`
+	QuantityPassed   pgtype.Numeric              `json:"quantity_passed"`
+	QuantityFailed   pgtype.Numeric              `json:"quantity_failed"`
+	QuantityOnHold   pgtype.Numeric              `json:"quantity_on_hold"`
+	FinalDecision    NullQualityStatus           `json:"final_decision"`
+	DecisionDate     pgtype.Timestamptz          `json:"decision_date"`
+	Notes            pgtype.Text                 `json:"notes"`
+	Attachments      []byte                      `json:"attachments"`
+	CreatedAt        pgtype.Timestamptz          `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz          `json:"updated_at"`
+}
+
+// Templates defining what to inspect and acceptable tolerances
+type QualityInspectionCriterium struct {
+	ID            int32              `json:"id"`
+	Name          string             `json:"name"`
+	Description   pgtype.Text        `json:"description"`
+	CriteriaType  string             `json:"criteria_type"`
+	Specification pgtype.Text        `json:"specification"`
+	UnitID        pgtype.Int4        `json:"unit_id"`
+	ToleranceMin  pgtype.Numeric     `json:"tolerance_min"`
+	ToleranceMax  pgtype.Numeric     `json:"tolerance_max"`
+	IsCritical    pgtype.Bool        `json:"is_critical"`
+	IsActive      pgtype.Bool        `json:"is_active"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
+// Detailed measurements and observations for each inspection criterion
+type QualityInspectionResult struct {
+	ID            int32              `json:"id"`
+	InspectionID  int32              `json:"inspection_id"`
+	CriteriaID    pgtype.Int4        `json:"criteria_id"`
+	CriteriaName  string             `json:"criteria_name"`
+	MeasuredValue pgtype.Numeric     `json:"measured_value"`
+	TextValue     pgtype.Text        `json:"text_value"`
+	IsPassed      pgtype.Bool        `json:"is_passed"`
+	Deviation     pgtype.Numeric     `json:"deviation"`
+	SampleNumber  pgtype.Int4        `json:"sample_number"`
+	Notes         pgtype.Text        `json:"notes"`
+	PhotoUrls     []byte             `json:"photo_urls"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+}
+
 type SalesOrder struct {
 	ID                   int32              `json:"id"`
 	OrderNumber          string             `json:"order_number"`
@@ -406,6 +1352,53 @@ type SalesOrderItem struct {
 	ShippedQuantity pgtype.Numeric     `json:"shipped_quantity"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+}
+
+// Individual time-point samples within stability studies
+type StabilitySample struct {
+	ID                   int32              `json:"id"`
+	StabilityStudyID     int32              `json:"stability_study_id"`
+	LabSampleID          pgtype.Int4        `json:"lab_sample_id"`
+	TimePointMonths      int32              `json:"time_point_months"`
+	ScheduledPullDate    pgtype.Date        `json:"scheduled_pull_date"`
+	ActualPullDate       pgtype.Date        `json:"actual_pull_date"`
+	TestingDueDate       pgtype.Date        `json:"testing_due_date"`
+	TestingCompleted     pgtype.Bool        `json:"testing_completed"`
+	TestingCompletedDate pgtype.Date        `json:"testing_completed_date"`
+	ResultsSummary       []byte             `json:"results_summary"`
+	AllTestsPassed       pgtype.Bool        `json:"all_tests_passed"`
+	Notes                pgtype.Text        `json:"notes"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+}
+
+// Long-term stability studies for shelf-life determination
+type StabilityStudy struct {
+	ID                      int32              `json:"id"`
+	StudyNumber             string             `json:"study_number"`
+	StudyName               string             `json:"study_name"`
+	MaterialID              int32              `json:"material_id"`
+	BatchNumber             string             `json:"batch_number"`
+	StudyType               pgtype.Text        `json:"study_type"`
+	StorageCondition        string             `json:"storage_condition"`
+	StudyDurationMonths     pgtype.Int4        `json:"study_duration_months"`
+	StartDate               pgtype.Date        `json:"start_date"`
+	ExpectedEndDate         pgtype.Date        `json:"expected_end_date"`
+	ActualEndDate           pgtype.Date        `json:"actual_end_date"`
+	TestSchedule            []byte             `json:"test_schedule"`
+	TestMethods             []byte             `json:"test_methods"`
+	Status                  pgtype.Text        `json:"status"`
+	ResultsSummary          pgtype.Text        `json:"results_summary"`
+	Conclusion              pgtype.Text        `json:"conclusion"`
+	ShelfLifeRecommendation pgtype.Int4        `json:"shelf_life_recommendation"`
+	ProtocolApprovedBy      pgtype.Int4        `json:"protocol_approved_by"`
+	ProtocolApprovalDate    pgtype.Date        `json:"protocol_approval_date"`
+	ReportApprovedBy        pgtype.Int4        `json:"report_approved_by"`
+	ReportApprovalDate      pgtype.Date        `json:"report_approval_date"`
+	Notes                   pgtype.Text        `json:"notes"`
+	Attachments             []byte             `json:"attachments"`
+	CreatedAt               pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt               pgtype.Timestamptz `json:"updated_at"`
 }
 
 type StockMovement struct {
@@ -436,6 +1429,33 @@ type Supplier struct {
 	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
 }
 
+// Periodic supplier quality performance metrics
+type SupplierQualityRating struct {
+	ID                    int32              `json:"id"`
+	SupplierID            int32              `json:"supplier_id"`
+	PeriodStart           pgtype.Date        `json:"period_start"`
+	PeriodEnd             pgtype.Date        `json:"period_end"`
+	TotalInspections      pgtype.Int4        `json:"total_inspections"`
+	PassedInspections     pgtype.Int4        `json:"passed_inspections"`
+	FailedInspections     pgtype.Int4        `json:"failed_inspections"`
+	TotalQuantityReceived pgtype.Numeric     `json:"total_quantity_received"`
+	QuantityRejected      pgtype.Numeric     `json:"quantity_rejected"`
+	TotalDefects          pgtype.Int4        `json:"total_defects"`
+	CriticalDefects       pgtype.Int4        `json:"critical_defects"`
+	MajorDefects          pgtype.Int4        `json:"major_defects"`
+	MinorDefects          pgtype.Int4        `json:"minor_defects"`
+	NcrCount              pgtype.Int4        `json:"ncr_count"`
+	QualityScore          pgtype.Numeric     `json:"quality_score"`
+	DefectRate            pgtype.Numeric     `json:"defect_rate"`
+	RejectionRate         pgtype.Numeric     `json:"rejection_rate"`
+	Rating                pgtype.Text        `json:"rating"`
+	Notes                 pgtype.Text        `json:"notes"`
+	CalculatedBy          pgtype.Int4        `json:"calculated_by"`
+	CalculationDate       pgtype.Timestamptz `json:"calculation_date"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+}
+
 type User struct {
 	ID           int32              `json:"id"`
 	Username     string             `json:"username"`
@@ -446,6 +1466,33 @@ type User struct {
 	IsActive     pgtype.Bool        `json:"is_active"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
+type VActiveQualityHold struct {
+	HoldNumber          string             `json:"hold_number"`
+	QualityStatus       QualityStatus      `json:"quality_status"`
+	MaterialName        string             `json:"material_name"`
+	Sku                 string             `json:"sku"`
+	BatchNumber         pgtype.Text        `json:"batch_number"`
+	Quantity            pgtype.Numeric     `json:"quantity"`
+	Unit                pgtype.Text        `json:"unit"`
+	WarehouseName       pgtype.Text        `json:"warehouse_name"`
+	HoldReason          string             `json:"hold_reason"`
+	PlacedDate          pgtype.Timestamptz `json:"placed_date"`
+	ExpectedReleaseDate pgtype.Date        `json:"expected_release_date"`
+	PlacedByName        pgtype.Text        `json:"placed_by_name"`
+	IsOverdue           bool               `json:"is_overdue"`
+}
+
+type VAnalystWorkload struct {
+	AnalystID        int32       `json:"analyst_id"`
+	AnalystName      pgtype.Text `json:"analyst_name"`
+	TotalAssignments int64       `json:"total_assignments"`
+	PendingTests     int64       `json:"pending_tests"`
+	InProgressTests  int64       `json:"in_progress_tests"`
+	RushTests        int64       `json:"rush_tests"`
+	OverdueTests     int64       `json:"overdue_tests"`
+	EarliestDueDate  interface{} `json:"earliest_due_date"`
 }
 
 type VBomCostAnalysis struct {
@@ -502,6 +1549,72 @@ type VEffectiveBom struct {
 	AlternateComponentCode pgtype.Text        `json:"alternate_component_code"`
 	AdjustedQuantity       int32              `json:"adjusted_quantity"`
 	CalculatedCost         pgtype.Numeric     `json:"calculated_cost"`
+}
+
+type VEquipmentCalibrationDue struct {
+	EquipmentCode       string                `json:"equipment_code"`
+	EquipmentName       string                `json:"equipment_name"`
+	EquipmentType       string                `json:"equipment_type"`
+	LastCalibrationDate pgtype.Date           `json:"last_calibration_date"`
+	NextCalibrationDate pgtype.Date           `json:"next_calibration_date"`
+	CalibrationStatus   NullCalibrationStatus `json:"calibration_status"`
+	DaysOverdue         int32                 `json:"days_overdue"`
+	Location            pgtype.Text           `json:"location"`
+	IsOperational       pgtype.Bool           `json:"is_operational"`
+}
+
+type VMaterialQualitySummary struct {
+	MaterialID        int32          `json:"material_id"`
+	MaterialName      string         `json:"material_name"`
+	Sku               string         `json:"sku"`
+	TotalInspections  int64          `json:"total_inspections"`
+	PassedInspections int64          `json:"passed_inspections"`
+	FailedInspections int64          `json:"failed_inspections"`
+	TotalNcrs         int64          `json:"total_ncrs"`
+	TotalHolds        int64          `json:"total_holds"`
+	ActiveHolds       int64          `json:"active_holds"`
+	PassRate          pgtype.Numeric `json:"pass_rate"`
+}
+
+type VPendingLabWork struct {
+	ID           int32                `json:"id"`
+	SampleNumber string               `json:"sample_number"`
+	MethodCode   string               `json:"method_code"`
+	MethodName   string               `json:"method_name"`
+	MaterialName string               `json:"material_name"`
+	BatchNumber  pgtype.Text          `json:"batch_number"`
+	Status       NullTestResultStatus `json:"status"`
+	Priority     pgtype.Int4          `json:"priority"`
+	DueDate      pgtype.Date          `json:"due_date"`
+	AssignedTo   pgtype.Text          `json:"assigned_to"`
+	IsRush       pgtype.Bool          `json:"is_rush"`
+	IsOverdue    bool                 `json:"is_overdue"`
+}
+
+type VSampleRetentionStatus struct {
+	SampleNumber        string              `json:"sample_number"`
+	SampleType          LabSampleType       `json:"sample_type"`
+	MaterialName        string              `json:"material_name"`
+	BatchNumber         pgtype.Text         `json:"batch_number"`
+	CollectionDate      pgtype.Timestamptz  `json:"collection_date"`
+	RetentionExpiryDate pgtype.Date         `json:"retention_expiry_date"`
+	SampleStatus        NullLabSampleStatus `json:"sample_status"`
+	StorageLocation     pgtype.Text         `json:"storage_location"`
+	DisposalDueSoon     bool                `json:"disposal_due_soon"`
+	DisposalOverdue     bool                `json:"disposal_overdue"`
+}
+
+type VSupplierQualitySummary struct {
+	SupplierID         int32          `json:"supplier_id"`
+	SupplierName       string         `json:"supplier_name"`
+	TotalInspections   int64          `json:"total_inspections"`
+	PassedInspections  int64          `json:"passed_inspections"`
+	FailedInspections  int64          `json:"failed_inspections"`
+	TotalNcrs          int64          `json:"total_ncrs"`
+	CriticalNcrs       int64          `json:"critical_ncrs"`
+	PassRate           pgtype.Numeric `json:"pass_rate"`
+	LatestQualityScore interface{}    `json:"latest_quality_score"`
+	LatestRating       interface{}    `json:"latest_rating"`
 }
 
 type Warehouse struct {
